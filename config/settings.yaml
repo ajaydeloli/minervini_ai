@@ -1,0 +1,112 @@
+universe:
+  source: "yfinance"              # nse_bhav | yfinance | csv
+  index: "nifty500"
+  min_price: 50                   # INR
+  min_avg_volume: 100000          # shares/day
+  min_market_cap_cr: 500          # crore INR
+
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  features_dir: "data/features"
+  fundamentals_dir: "data/fundamentals"
+  news_dir: "data/news"
+
+watchlist:
+  always_scan: true
+  priority_in_reports: true
+  always_generate_charts: true
+  min_score_alert: 55
+
+stage:
+  ma200_slope_lookback: 20
+  ma50_slope_lookback: 10
+
+trend_template:
+  ma200_slope_lookback: 20
+  pct_above_52w_low: 25.0
+  pct_below_52w_high: 25.0
+  min_rs_rating: 70
+
+vcp:
+  detector: "rule_based"
+  min_contractions: 2
+  max_contractions: 5
+  require_declining_depth: true
+  require_vol_contraction: true
+  min_weeks: 3
+  max_weeks: 52
+  tightness_pct: 10.0
+  max_depth_pct: 50.0
+
+fundamentals:
+  enabled: true
+  hard_gate: false
+  cache_days: 7
+  conditions:
+    min_roe: 15.0
+    max_de: 1.0
+    min_promoter_holding: 35.0
+    min_sales_growth_yoy: 10.0
+
+news:
+  enabled: false                  # enable after getting newsdata.io key
+  cache_minutes: 30
+  llm_rescore: false
+
+scoring:
+  weights:
+    rs_rating: 0.30
+    trend: 0.25
+    vcp: 0.25
+    volume: 0.10
+    fundamental: 0.07
+    news: 0.03
+  min_score_alert: 70
+  setup_quality_thresholds:
+    a_plus: 85
+    a: 70
+    b: 55
+    c: 40
+
+paper_trading:
+  enabled: false                  # enable when ready
+  initial_capital: 100000
+  max_positions: 10
+  risk_per_trade_pct: 2.0
+  min_score_to_trade: 70
+  min_confidence: 50
+
+backtest:
+  trailing_stop_pct: 0.07
+  fixed_stop_pct: 0.05
+  target_pct: 0.10
+  max_hold_days: 20
+  position_size_pct: 0.10
+
+llm:
+  enabled: false                  # enable after getting API key
+  provider: "groq"
+  model: "llama-3.3-70b-versatile"
+  max_tokens: 350
+  only_for_quality: ["A+", "A"]
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 2
+  rate_limit_read: "100/minute"
+  rate_limit_admin: "10/minute"
+
+dashboard:
+  port: 8501
+
+alerts:
+  telegram:
+    enabled: false
+  email:
+    enabled: false
+
+scheduler:
+  run_time: "15:35"
+  timezone: "Asia/Kolkata"
