@@ -1,8 +1,8 @@
 # PROJECT_DESIGN.md
 # Minervini SEPA Stock Analysis System
 
-> **Version:** 1.3.0  
-> **Last Updated:** 2026-04-02  
+> **Version:** 1.3.1  
+> **Last Updated:** 2026-04-04  
 > **Methodology:** Mark Minervini's Specific Entry Point Analysis (SEPA)  
 > **Target Market:** NSE / Indian Equities (adaptable to any market)
 
@@ -1583,21 +1583,25 @@ frontend/
 ### Phase 1 — Foundation (Weeks 1–3)
 **Goal:** Raw data flowing into clean, queryable storage.
 
-- [ ] Set up project skeleton (all directories, `__init__.py`, `pyproject.toml`)
-- [ ] Implement `ingestion/base.py` abstract interface
-- [ ] Implement `ingestion/nse_bhav.py` (NSE Bhavcopy daily download)
-- [ ] Implement `ingestion/yfinance_source.py` (historical backfill)
-- [ ] Implement `ingestion/validator.py` (schema + sanity checks)
-- [ ] Implement `ingestion/universe_loader.py` — unified symbol resolver with watchlist + universe merge
-- [ ] Implement `load_watchlist_file()` — parse CSV / JSON / XLSX / TXT watchlist files
-- [ ] SQLite `watchlist` table (symbol, note, added_via, last_score, last_quality)
-- [ ] Implement `storage/parquet_store.py` with atomic append support
-- [ ] Implement `utils/logger.py`, `utils/date_utils.py`, `utils/exceptions.py`
-- [ ] Write `scripts/run_daily.py` with `--watchlist`, `--symbols`, `--watchlist-only`, `--scope` flags
-- [ ] Write `scripts/bootstrap.py` skeleton (full history download)
-- [ ] `config/settings.yaml` with all Phase 1 parameters including watchlist config
-- [ ] Unit tests for `load_watchlist_file()` (CSV, JSON, XLSX, invalid symbols, empty file)
-- [ ] **Deliverable:** `python scripts/run_daily.py --watchlist mylist.csv` analyses only the symbols in the file. `python scripts/run_daily.py --symbols "RELIANCE,DIXON"` analyses inline symbols. Default run analyses watchlist + universe together.
+- [x] Set up project skeleton (all directories, `__init__.py`, `pyproject.toml`)
+- [x] Implement `ingestion/base.py` abstract interface
+- [ ] Implement `ingestion/nse_bhav.py` (NSE Bhavcopy daily download) ← **NOT BUILT** — deferred to Phase 4; yfinance covers backfill
+- [x] Implement `ingestion/yfinance_source.py` (historical backfill)
+- [x] Implement `ingestion/validator.py` (schema + sanity checks)
+- [x] Implement `ingestion/universe_loader.py` — unified symbol resolver with watchlist + universe merge
+- [x] Implement `load_watchlist_file()` — parse CSV / JSON / XLSX / TXT watchlist files
+- [x] SQLite `watchlist` table (symbol, note, added_via, last_score, last_quality)
+- [x] Implement `storage/parquet_store.py` with atomic append support
+- [x] Implement `utils/logger.py`, `utils/date_utils.py`, `utils/exceptions.py`, `utils/math_utils.py`
+- [x] Write `scripts/run_daily.py` with `--watchlist`, `--symbols`, `--watchlist-only`, `--scope` flags (Phase 1 skeleton — feature + screen hooks wired in Phase 2/3)
+- [x] Write `scripts/bootstrap.py` skeleton (full history download — feature compute wired in Phase 2)
+- [x] `config/settings.yaml` with all Phase 1 parameters including watchlist config
+- [x] Unit tests for storage layer (`test_parquet_store.py`, `test_sqlite_store.py`, `conftest.py`)
+- [x] Unit tests for `load_watchlist_file()` and `resolve_symbols()` (`test_universe_loader.py`)
+- [x] **Deliverable:** `python scripts/run_daily.py --watchlist mylist.csv` resolves symbols from file. `python scripts/run_daily.py --symbols "RELIANCE,DIXON"` resolves inline symbols. Default run merges watchlist + universe. (Feature compute + screening wired in Phases 2–3.)
+
+**Phase 1 status: ✅ COMPLETE** — one item intentionally deferred:
+- `ingestion/nse_bhav.py` — NSE Bhavcopy downloader deferred to Phase 4 (yfinance covers all backfill needs through Phase 3)
 
 ---
 
