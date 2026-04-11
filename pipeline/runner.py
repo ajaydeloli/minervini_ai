@@ -88,6 +88,8 @@ class RunResult:
     html_path: Optional[Path] = None
     alert_sent: bool = False
     status: str = "success"
+    paper_trades_entered: int = 0
+    paper_trades_queued: int = 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -183,6 +185,19 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
         from storage.sqlite_store import init_db, log_run as _log_run
 
         init_db(context.db_path)  # idempotent; always run so schema is live
+
+        # ── Init paper trading tables if enabled ──────────────────────────
+        try:
+            if context.config.get("paper_trading", {}).get("enabled", False):
+                from paper_trading.portfolio import init_paper_trading_tables
+                init_paper_trading_tables(context.db_path)
+                log.info("Step 3: paper trading tables initialised")
+        except Exception as pt_exc:
+            log.warning(
+                "Step 3: init_paper_trading_tables failed — continuing",
+                reason=str(pt_exc),
+                exc_info=True,
+            )
 
         if not context.dry_run:
             run_id = _log_run(
@@ -612,6 +627,43 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
             "Step 12: finish_run — skipped (no run_id; dry_run or log_run failed)"
         )
 
+    # ── Step 12b: Paper trading ───────────────────────────────────────────────
+    pt_summary: dict = {}
+    if not context.dry_run and context.config.get("paper_trading", {}).get("enabled", False):
+        t0 = time.monotonic()
+        log.info("Step 12b: paper_trading — start", results=len(results))
+        try:
+            from paper_trading.simulator import process_screen_results
+            from paper_trading.report import get_portfolio_summary, format_summary_text
+            pt_summary = process_screen_results(results, context.db_path, context.config)
+            log.info(
+                "Step 12b: paper_trading — trades processed",
+                entered=pt_summary["entered"],
+                pyramided=pt_summary["pyramided"],
+                queued=pt_summary["queued"],
+                skipped=pt_summary["skipped"],
+            )
+            # Log portfolio summary after processing
+            port_summary = get_portfolio_summary(context.db_path)
+            log.info(
+                "Step 12b: portfolio state",
+                total_value=port_summary.total_value,
+                cash=port_summary.cash,
+                open_trades=port_summary.open_trades,
+                win_rate=port_summary.win_rate,
+            )
+            # Print human-readable summary to stdout (visible in terminal runs)
+            print(format_summary_text(port_summary))
+        except Exception as exc:
+            log.warning(
+                "Step 12b: paper_trading failed — continuing",
+                reason=str(exc),
+                exc_info=True,
+            )
+        log.info("Step 12b: paper_trading — done", duration_sec=_elapsed(t0))
+    else:
+        log.info("Step 12b: paper_trading — skipped (dry_run or disabled)")
+
     # ── Step 13: Build and return RunResult ───────────────────────────────────
     result.symbols_screened = len(symbols_to_scan)
     result.passed_stage2    = passed_stage2
@@ -624,6 +676,8 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
     result.html_path        = html_path
     result.alert_sent       = alert_sent
     result.status           = status
+    result.paper_trades_entered = pt_summary.get("entered", 0) if pt_summary else 0
+    result.paper_trades_queued  = pt_summary.get("queued",  0) if pt_summary else 0
 
     log.info(
         "Pipeline run complete",
