@@ -1,0 +1,223 @@
+# config/symbol_aliases.yaml
+# ---------------------------------------------------------------------------
+# NSE symbol → list of lowercase text aliases for news article matching.
+# Used by: news/sentiment.py (Phase 5)
+# Rules:
+#   - All alias strings must be lowercase
+#   - Each symbol has 2–4 aliases covering common press variations
+#     (full company name, short name, brand name, ticker-as-text)
+#   - Trailing spaces on short tickers (e.g. "ril ") prevent false matches
+#     inside longer words.  Add them intentionally where ambiguity exists.
+# ---------------------------------------------------------------------------
+
+# ── Banking & Financial Services ──────────────────────────────────────────
+
+HDFCBANK:
+  - "hdfc bank"
+  - "hdfcbank"
+  - "hdfc bank ltd"
+
+ICICIBANK:
+  - "icici bank"
+  - "icicibank"
+  - "icici bank ltd"
+
+KOTAKBANK:
+  - "kotak bank"
+  - "kotak mahindra bank"
+  - "kotak banking"
+
+AXISBANK:
+  - "axis bank"
+  - "axisbank"
+  - "axis bank ltd"
+
+SBIN:
+  - "state bank of india"
+  - "sbi "
+  - "sbin"
+  - "sbi bank"
+
+BAJFINANCE:
+  - "bajaj finance"
+  - "bajaj fin"
+  - "bajfinance"
+
+BAJAJFINSV:
+  - "bajaj finserv"
+  - "bajaj financial services"
+  - "bajajfinsv"
+
+HDFC:
+  - "hdfc ltd"
+  - "housing development finance"
+  - "hdfc corporation"
+
+# ── IT & Technology ───────────────────────────────────────────────────────
+
+TCS:
+  - "tcs"
+  - "tata consultancy"
+  - "tata consultancy services"
+
+INFY:
+  - "infosys"
+  - "infy "
+  - "infosys ltd"
+  - "infosys bpo"
+
+WIPRO:
+  - "wipro"
+  - "wipro ltd"
+  - "wipro technologies"
+
+HCLTECH:
+  - "hcl technologies"
+  - "hcltech"
+  - "hcl tech"
+  - "hcl techno"
+
+TECHM:
+  - "tech mahindra"
+  - "techm"
+  - "tech mahindra ltd"
+
+TATAELXSI:
+  - "tata elxsi"
+  - "tataelxsi"
+  - "tata elxsi ltd"
+
+DIXON:
+  - "dixon technologies"
+  - "dixon tech"
+  - "dixon technologies india"
+
+# ── Conglomerates & Industrials ───────────────────────────────────────────
+
+RELIANCE:
+  - "reliance industries"
+  - "ril "
+  - "reliance jio"
+  - "reliance retail"
+
+LT:
+  - "larsen and toubro"
+  - "larsen & toubro"
+  - "l&t "
+  - "l and t"
+
+ADANIPORTS:
+  - "adani ports"
+  - "adani ports and sez"
+  - "adaniports"
+  - "adani port"
+
+TATAMOTORS:
+  - "tata motors"
+  - "tatamotors"
+  - "tata motors ltd"
+  - "jaguar land rover"
+
+# ── Consumer & Retail ─────────────────────────────────────────────────────
+
+HINDUNILVR:
+  - "hindustan unilever"
+  - "hul "
+  - "hindunilvr"
+  - "unilever india"
+
+NESTLEIND:
+  - "nestle india"
+  - "nestleind"
+  - "nestle india ltd"
+  - "maggi"
+
+TITAN:
+  - "titan company"
+  - "titan "
+  - "tanishq"
+  - "titan watches"
+
+ASIANPAINT:
+  - "asian paints"
+  - "asianpaint"
+  - "asian paints ltd"
+
+TRENT:
+  - "trent ltd"
+  - "trent "
+  - "westside"
+  - "zudio"
+
+NYKAA:
+  - "nykaa"
+  - "fss nykaa"
+  - "nykaa fashion"
+  - "fsn e-commerce"
+
+# ── Automobiles ───────────────────────────────────────────────────────────
+
+MARUTI:
+  - "maruti suzuki"
+  - "maruti "
+  - "maruti suzuki india"
+  - "msil"
+
+# ── Pharma & Healthcare ───────────────────────────────────────────────────
+
+SUNPHARMA:
+  - "sun pharmaceutical"
+  - "sun pharma"
+  - "sunpharma"
+  - "sun pharma industries"
+
+DRREDDY:
+  - "dr reddy"
+  - "dr. reddy"
+  - "dr reddys laboratories"
+  - "drreddy"
+
+# ── Cement & Building Materials ───────────────────────────────────────────
+
+ULTRACEMCO:
+  - "ultratech cement"
+  - "ultracemco"
+  - "ultratech"
+  - "ultratech cement ltd"
+
+ASTRAL:
+  - "astral ltd"
+  - "astral poly technik"
+  - "astral pipes"
+  - "astral "
+
+POLYCAB:
+  - "polycab india"
+  - "polycab"
+  - "polycab wires"
+  - "polycab cables"
+
+# ── New-Age / Digital ─────────────────────────────────────────────────────
+
+ZOMATO:
+  - "zomato"
+  - "zomato ltd"
+  - "blinkit"
+  - "zomato food"
+
+PAYTM:
+  - "paytm"
+  - "one97 communications"
+  - "paytm payments"
+  - "paytm bank"
+
+IRCTC:
+  - "irctc"
+  - "indian railway catering"
+  - "irctc ltd"
+  - "rail tourism"
+
+DELHIVERY:
+  - "delhivery"
+  - "delhivery ltd"
+  - "delhivery logistics"

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minervini SEPA Watchlist — {{ run_date }}</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:          #0d1117;
+    --surface:     #161b22;
+    --surface2:    #21262d;
+    --border:      #30363d;
+    --text:        #e6edf3;
+    --muted:       #8b949e;
+    --accent:      #58a6ff;
+    --gold:        #f0b429;
+    --gold-bg:     #2e2300;
+    --green:       #3fb950;
+    --green-bg:    #0f2a1a;
+    --blue:        #58a6ff;
+    --blue-bg:     #0d1f33;
+    --grey:        #8b949e;
+    --grey-bg:     #1c2128;
+    --red:         #f85149;
+    --star-on:     #f0b429;
+    --star-off:    #30363d;
+    --row-hover:   #1c2128;
+    --shadow:      0 4px 20px rgba(0,0,0,0.5);
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 0 0 48px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ── Header ───────────────────────────────────────────────────────── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 24px;
+    box-shadow: var(--shadow);
+  }
+  .header-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .header-title span { color: var(--accent); }
+  .header-meta {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  .stat-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .stat-chip strong {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .stat-chip.aplus strong { color: var(--gold); }
+  .stat-chip.a     strong { color: var(--green); }
+  .stat-chip.total strong { color: var(--text); }
+
+  /* ── Main container ───────────────────────────────────────────────── */
+  .container { max-width: 1300px; margin: 32px auto; padding: 0 24px; }
+
+  /* ── Section headings ─────────────────────────────────────────────── */
+  .section-heading {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Tables ───────────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--row-hover); }
+  td { padding: 9px 14px; vertical-align: middle; white-space: nowrap; }
+  .col-rank  { color: var(--muted); font-size: 12px; width: 44px; text-align: center; }
+  .col-sym   { font-weight: 700; font-size: 14px; color: var(--text); }
+  .col-score { font-weight: 700; color: var(--accent); }
+  .col-num   { color: var(--muted); }
+  .col-bool  { text-align: center; }
+  .col-bool .yes { color: var(--green); font-weight: 600; }
+  .col-bool .no  { color: var(--muted); }
+
+  /* ── Star (watchlist indicator) ───────────────────────────────────── */
+  .star     { font-size: 16px; line-height: 1; }
+  .star.on  { color: var(--star-on);  }
+  .star.off { color: var(--star-off); }
+
+  /* ── Quality badges ───────────────────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .badge-aplus { background: var(--gold-bg);  color: var(--gold);  border: 1px solid var(--gold); }
+  .badge-a     { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+  .badge-b     { background: var(--blue-bg);  color: var(--blue);  border: 1px solid var(--blue); }
+  .badge-c     { background: var(--grey-bg);  color: var(--grey);  border: 1px solid var(--grey); }
+  .badge-fail  { background: #1a0a0a; color: var(--red); border: 1px solid var(--red); }
+  .badge-pass  { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+  .badge-neutral { background: var(--grey-bg); color: var(--grey); border: 1px solid var(--grey); }
+  .badge-neg   { background: #1a0a0a; color: var(--red); border: 1px solid var(--red); }
+  .fund-detail { font-size: 11px; color: var(--muted); margin-top: 3px; white-space: nowrap; }
+
+  /* ── Collapsible section ──────────────────────────────────────────── */
+  details { margin-top: 32px; }
+  details > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+    outline: none;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary .chevron {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    text-align: center;
+    line-height: 15px;
+    font-size: 12px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  details[open] > summary .chevron { transform: rotate(90deg); }
+  .all-results-wrap { margin-top: 14px; }
+
+  /* ── Empty state ──────────────────────────────────────────────────── */
+  .empty-state {
+    text-align: center;
+    padding: 36px 16px;
+    color: var(--muted);
+    font-size: 14px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+
+  /* ── Footer ───────────────────────────────────────────────────────── */
+  .footer {
+    margin-top: 48px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .footer strong { color: var(--accent); }
+</style>
+</head>
+<body>
+
+{# ── Macros ──────────────────────────────────────────────────────────── #}
+{% macro quality_badge(q) %}
+  {% if   q == 'A+' %}<span class="badge badge-aplus">A+</span>
+  {% elif q == 'A'  %}<span class="badge badge-a">A</span>
+  {% elif q == 'B'  %}<span class="badge badge-b">B</span>
+  {% elif q == 'C'  %}<span class="badge badge-c">C</span>
+  {% else           %}<span class="badge badge-fail">FAIL</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro bool_cell(val) %}
+  {% if val %}<span class="yes">✓</span>{% else %}<span class="no">—</span>{% endif %}
+{% endmacro %}
+
+{% macro fmt_price(v) %}{{ "%.2f"|format(v) if (v is defined and v is not none) else "—" }}{% endmacro %}
+{% macro fmt_pct(v)   %}{{ "%.1f%%"|format(v) if (v is defined and v is not none) else "—" }}{% endmacro %}
+
+{% macro fund_badge(r) %}
+  {% set fd = r.get('fundamental_details') or {} %}
+  {% if fd %}
+    {% set cm = fd.get('conditions_met', '?') %}
+    {% if r.get('fundamental_pass') %}
+      <span class="badge badge-pass">✅ {{ cm }}/7</span>
+    {% else %}
+      <span class="badge badge-fail">❌ {{ cm }}/7</span>
+    {% endif %}
+    <div class="fund-detail">
+      ROE {{ "%.1f"|format(fd.get('roe') or 0) }}%
+      · D/E {{ "%.2f"|format(fd.get('debt_to_equity') or 0) }}
+      · EPS {{ "Y" if fd.get('eps_accelerating') else "N" }}
+      · Sales {{ "%.1f"|format(fd.get('sales_growth_yoy') or 0) }}%
+      · Promo {{ "%.1f"|format(fd.get('promoter_holding') or 0) }}%
+    </div>
+  {% else %}
+    <span class="badge badge-neutral">Not available</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro news_badge(v) %}
+  {% if v is none %}
+    <span class="badge badge-neutral">N/A</span>
+  {% elif v > 20 %}
+    <span class="badge badge-pass">Positive</span>
+  {% elif v < -20 %}
+    <span class="badge badge-neg">Negative</span>
+  {% else %}
+    <span class="badge badge-neutral">Neutral</span>
+  {% endif %}
+{% endmacro %}
+
+{# ── Header ─────────────────────────────────────────────────────────── #}
+<div class="header">
+  <div class="header-title">
+    Minervini <span>SEPA</span> Watchlist — {{ run_date }}
+  </div>
+  <div class="header-meta">
+    <div class="stat-chip aplus">
+      <strong>{{ a_plus_count }}</strong> A+ Setups
+    </div>
+    <div class="stat-chip a">
+      <strong>{{ a_count }}</strong> A Setups
+    </div>
+    <div class="stat-chip total">
+      <strong>{{ total_count }}</strong> Total Screened
+    </div>
+    <div class="stat-chip">
+      Generated: {{ generated_at }}
+    </div>
+  </div>
+</div>
+
+{# ── Main content ────────────────────────────────────────────────────── #}
+<div class="container">
+
+  {# ── A+/A table ────────────────────────────────────────────────────── #}
+  {% set premium = results | selectattr("setup_quality", "in", ["A+", "A"]) | list %}
+  {% if premium %}
+  <div class="section-heading">⭐ A+ / A Setups ({{ premium | length }})</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-rank">#</th>
+          <th>★</th>
+          <th>Symbol</th>
+          <th>Score</th>
+          <th>Quality</th>
+          <th>Stage</th>
+          <th>RS</th>
+          <th>VCP</th>
+          <th>Breakout</th>
+          <th>Entry</th>
+          <th>Stop</th>
+          <th>Risk %</th>
+          <th>Fundamentals</th>
+          <th>News</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in premium %}
+        <tr>
+          <td class="col-rank">{{ r.rank }}</td>
+          <td class="star {% if r.in_watchlist %}on{% else %}off{% endif %}">
+            {% if r.in_watchlist %}★{% else %}☆{% endif %}
+          </td>
+          <td class="col-sym">{{ r.symbol }}</td>
+          <td class="col-score">{{ r.score }}</td>
+          <td>{{ quality_badge(r.setup_quality) }}</td>
+          <td class="col-num">{{ r.stage if r.stage is not none else "—" }}</td>
+          <td class="col-num">{{ r.rs_rating if r.rs_rating is not none else "—" }}</td>
+          <td class="col-bool">{{ bool_cell(r.vcp_qualified) }}</td>
+          <td class="col-bool">{{ bool_cell(r.breakout_triggered) }}</td>
+          <td class="col-num">{{ fmt_price(r.entry_price) }}</td>
+          <td class="col-num">{{ fmt_price(r.stop_loss) }}</td>
+          <td class="col-num">{{ fmt_pct(r.risk_pct) }}</td>
+          <td>{{ fund_badge(r) }}</td>
+          <td>{{ news_badge(r.get('news_score')) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {# ── All results (collapsible) ─────────────────────────────────────── #}
+  <details {% if not premium %}open{% endif %}>
+    <summary>
+      <span class="chevron">▶</span>
+      <span class="section-heading" style="margin-bottom:0;border:none;">
+        All Results ({{ results | length }})
+      </span>
+    </summary>
+    <div class="all-results-wrap">
+      {% if results %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-rank">#</th>
+              <th>★</th>
+              <th>Symbol</th>
+              <th>Score</th>
+              <th>Quality</th>
+              <th>Stage</th>
+              <th>RS</th>
+              <th>VCP</th>
+              <th>Breakout</th>
+              <th>Entry</th>
+              <th>Stop</th>
+              <th>Risk %</th>
+              <th>Fundamentals</th>
+              <th>News</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in results %}
+            <tr>
+              <td class="col-rank">{{ r.rank }}</td>
+              <td class="star {% if r.in_watchlist %}on{% else %}off{% endif %}">
+                {% if r.in_watchlist %}★{% else %}☆{% endif %}
+              </td>
+              <td class="col-sym">{{ r.symbol }}</td>
+              <td class="col-score">{{ r.score }}</td>
+              <td>{{ quality_badge(r.setup_quality) }}</td>
+              <td class="col-num">{{ r.stage if r.stage is not none else "—" }}</td>
+              <td class="col-num">{{ r.rs_rating if r.rs_rating is not none else "—" }}</td>
+              <td class="col-bool">{{ bool_cell(r.vcp_qualified) }}</td>
+              <td class="col-bool">{{ bool_cell(r.breakout_triggered) }}</td>
+              <td class="col-num">{{ fmt_price(r.entry_price) }}</td>
+              <td class="col-num">{{ fmt_price(r.stop_loss) }}</td>
+              <td class="col-num">{{ fmt_pct(r.risk_pct) }}</td>
+              <td>{{ fund_badge(r) }}</td>
+              <td>{{ news_badge(r.get('news_score')) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">No results for {{ run_date }}.</div>
+      {% endif %}
+    </div>
+  </details>
+
+  {# ── Footer ────────────────────────────────────────────────────────── #}
+  <div class="footer">
+    Generated by <strong>Minervini AI</strong> &nbsp;|&nbsp; minervini_ai v0.x
+  </div>
+
+</div><!-- /container -->
+</body>
+</html>

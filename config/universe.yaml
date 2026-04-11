@@ -1,0 +1,34 @@
+# Stock universe definition
+# The system will scan all symbols in this list every trading day.
+# Start with a small handpicked list, expand to Nifty 500 later.
+
+mode: "list"                      # "list" | "nifty500" | "nse_all"
+
+# Handpicked starting universe — expand this as you go
+symbols:
+  - RELIANCE
+  - TCS
+  - INFY
+  - HDFCBANK
+  - ICICIBANK
+  - SBIN
+  - BAJFINANCE
+  - WIPRO
+  - TATAMOTORS
+  - MARUTI
+  - SUNPHARMA
+  - AXISBANK
+  - DIXON
+  - TATAELXSI
+  - CDSL
+  - DMART
+  - TITAN
+  - ASIANPAINT
+  - NESTLEIND
+  - LTIM
+
+# Filters applied to any symbol before it enters the universe
+filters:
+  min_price_inr: 50
+  min_avg_daily_volume: 100000
+  min_listing_years: 1            # exclude recently listed stocks
