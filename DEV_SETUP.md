@@ -1058,3 +1058,168 @@ I'll write all three files complete and ready to drop in. From there we build `i
 ---
 
 *This guide covers setup only. Refer to `PROJECT_DESIGN.md` for all architectural decisions.*
+
+---
+
+## 12. Production Deployment (ShreeVault)
+
+This section covers running Minervini AI as persistent systemd services so everything
+starts automatically on boot and the daily screen fires on schedule without manual
+intervention.
+
+All unit files live in `deploy/`. The install script symlinks them into
+`/etc/systemd/system/` — the project files remain the single source of truth, so
+editing a file in `deploy/` takes effect after one `sudo systemctl daemon-reload`.
+
+---
+
+### 12.1 Services overview
+
+| Unit | Type | Purpose |
+|---|---|---|
+| `minervini-daily.timer` | Timer | Fires every Mon–Fri at 15:35 IST |
+| `minervini-daily.service` | Oneshot | Runs `scripts/run_daily.py --date today` |
+| `minervini-api.service` | Simple (always-on) | FastAPI backend on port 8000 |
+| `minervini-dashboard.service` | Simple (always-on) | Streamlit dashboard on port 8501 |
+
+---
+
+### 12.2 One-time install
+
+```bash
+# From the project root on ShreeVault
+cd /home/ubuntu/projects/minervini_ai
+
+# Make scripts executable (only needed once)
+chmod +x deploy/install.sh deploy/uninstall.sh
+
+# Run the installer as root
+sudo bash deploy/install.sh
+```
+
+The script will:
+1. Symlink all `.service` and `.timer` files into `/etc/systemd/system/`
+2. Run `systemctl daemon-reload`
+3. Enable and start `minervini-daily.timer`, `minervini-api.service`, and `minervini-dashboard.service`
+4. Print a live status summary for all three
+
+It is **idempotent** — running it a second time is safe and will just re-create the
+symlinks and print the current status.
+
+**Prerequisite:** `.env` must exist and be populated before running the installer.
+See [Section 6](#6-environment-variables-env) if you haven't done this yet.
+
+---
+
+### 12.3 Checking service status
+
+```bash
+# Quick one-liner for all three
+systemctl status minervini-daily.timer minervini-api.service minervini-dashboard.service
+
+# Timer specifically — shows next trigger time
+systemctl list-timers --all | grep minervini
+
+# Is the API actually responding?
+curl -s http://localhost:8000/health | python3 -m json.tool
+```
+
+---
+
+### 12.4 Viewing logs
+
+```bash
+# Last 50 lines of the daily screen (most recent run)
+journalctl -u minervini-daily -n 50
+
+# Follow the API log in real-time
+journalctl -u minervini-api -f
+
+# Follow the dashboard log in real-time
+journalctl -u minervini-dashboard -f
+
+# Logs from today only
+journalctl -u minervini-daily --since today
+
+# Logs for a specific date
+journalctl -u minervini-daily --since "2025-06-01 00:00:00" --until "2025-06-01 23:59:59"
+```
+
+---
+
+### 12.5 Stopping and restarting
+
+```bash
+# Restart the API (e.g. after a code change)
+sudo systemctl restart minervini-api.service
+
+# Restart the dashboard
+sudo systemctl restart minervini-dashboard.service
+
+# Stop everything
+sudo systemctl stop minervini-api.service minervini-dashboard.service minervini-daily.timer
+
+# Start everything again
+sudo systemctl start minervini-daily.timer minervini-api.service minervini-dashboard.service
+
+# Trigger the daily screen manually right now (outside the timer)
+sudo systemctl start minervini-daily.service
+journalctl -u minervini-daily -f     # watch it run
+```
+
+---
+
+### 12.6 How the daily timer works
+
+```
+15:35 IST (Mon–Fri)
+       │
+       ▼
+minervini-daily.timer  ──fires──▶  minervini-daily.service
+                                         │
+                                         ▼
+                              .venv/bin/python scripts/run_daily.py --date today
+                                         │
+                                         ▼
+                              Ingestion → Features → Scoring → Alerts → Report
+```
+
+`Persistent=true` means if ShreeVault is rebooted or powered off at 15:35, systemd
+will run the missed job as soon as the server comes back online — you will never
+silently skip a trading day.
+
+`RandomizedDelaySec=30` adds up to 30 seconds of jitter so the timer does not
+hammer external APIs at the exact same second every day.
+
+---
+
+### 12.7 Deploying code changes
+
+After pushing new code and pulling on the server:
+
+```bash
+cd /home/ubuntu/projects/minervini_ai
+git pull
+
+# If you only changed Python files (no unit file changes):
+sudo systemctl restart minervini-api.service minervini-dashboard.service
+
+# If you edited a file in deploy/:
+sudo systemctl daemon-reload
+sudo systemctl restart minervini-api.service minervini-dashboard.service
+```
+
+The daily service will pick up new code automatically on its next run — no restart
+needed for `minervini-daily` because it is a fresh process every time the timer fires.
+
+---
+
+### 12.8 Uninstalling
+
+```bash
+sudo bash deploy/uninstall.sh
+```
+
+This stops and disables all units, removes the symlinks from `/etc/systemd/system/`,
+and reloads the daemon. The files in `deploy/` are left untouched so you can
+reinstall at any time with `deploy/install.sh`.

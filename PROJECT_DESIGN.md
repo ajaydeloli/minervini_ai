@@ -34,7 +34,7 @@
 
 ## 🏗️ Build Status
 
-> **Last audited:** 2026-04-11 — Phase 8 complete. Backtesting engine fully built: walk-forward engine (no lookahead bias), BacktestPortfolio with trailing stop + VCP floor, NSE market regime calendar, parameter sweep across [5%, 7%, 10%, 15%, fixed], BacktestMetrics (CAGR/Sharpe/drawdown/win-rate), HTML+CSV+equity-curve PNG report, `backtest_runner.py` CLI, `BacktestDataError` exception. All backtest unit tests passing.
+> **Last audited:** 2026-04-11 — Phase 9 complete. Hardening & production layer fully built: structured JSON logging with 30-day rotating files (`utils/logger.py`), data lineage per run (`utils/run_meta.py` → git SHA + config hash stored in `run_history`), `Makefile` with 13 targets, `systemd` service + timer files (`deploy/`), comprehensive `RUNBOOK.md`, 34 unit test files + 4 integration test files, feature benchmark script (`scripts/benchmark_features.py`). Prometheus metrics endpoint not built (marked optional in spec). No `.github/workflows` CI config (local `make test` target covers the spec requirement).
 
 | Phase | Name | Status | Tests | Notes |
 |---|---|---|---|---|
@@ -46,7 +46,7 @@
 | **6** | LLM Narrative Layer | ✅ **COMPLETE** | llm explainer unit tests pass | All providers built; explainer wired into runner Step 5b; narrative column in HTML report; graceful degradation confirmed |
 | **7** | Paper Trading Simulator | ✅ **COMPLETE** | 29 unit tests passing | `portfolio.py` + `order_queue.py` + `simulator.py` + `report.py`; wired into `pipeline/runner.py`; IST market-hours aware; pyramiding logic |
 | **8** | Backtesting Engine | ✅ **COMPLETE** | backtest unit tests passing | `engine.py` + `portfolio.py` + `metrics.py` + `regime.py` + `report.py`; `backtest_runner.py` CLI; walk-forward; trailing stop with VCP floor; NSE regime calendar; parameter sweep |
-| **9** | Hardening & Production | 🔲 not started | — | |
+| **9** | Hardening & Production | ✅ **COMPLETE** | run_history, run_meta, benchmark tests pass | Prometheus endpoint not built (optional); no GitHub Actions CI (local `make test` satisfies spec); all other deliverables complete |
 | **10** | API Layer (FastAPI) | 🔲 not started | — | |
 | **11** | Streamlit Dashboard MVP | 🔲 not started | — | |
 | **12** | Next.js Production Frontend | 🔲 not started | — | |
@@ -1823,6 +1823,28 @@ All six deliverables from the Phase 7 roadmap are resolved:
 6. ✅ **Pipeline wiring** — `pipeline/runner.py` calls `process_screen_results(results, db_path, config)` and logs the returned summary dict; `get_portfolio_summary()` printed at run end.
 
 ---
+
+### What Was Built in Phase 9
+
+| Module | File | Key Capability | Status |
+|---|---|---|---|
+| Structured logger | `utils/logger.py` | `_JSONFormatter` (production) + `_DevFormatter` (dev/colour); `TimedRotatingFileHandler` 30-day rotation; per-module level overrides from `config/logging.yaml`; `StructuredLogger` wrapper for `key=value` kwargs | ✅ |
+| Logging config | `config/logging.yaml` | Console + rotating-file handlers; third-party library silencing (yfinance, urllib3, matplotlib) | ✅ |
+| Run metadata | `utils/run_meta.py` | `get_git_sha()` → 8-char short SHA via `git rev-parse --short HEAD`; `get_config_hash(path)` → 8-char MD5 fingerprint of settings.yaml; both return `'unknown'` on any error | ✅ |
+| Data lineage in RunContext | `pipeline/context.py` | `config_hash()` → SHA-256 of serialised config dict; `git_sha()` → full HEAD SHA; both stored in `run_history` via `log_run()` | ✅ |
+| Makefile | `Makefile` | 13 targets: `install`, `test`, `test-fast`, `lint`, `format`, `format-check`, `daily`, `backtest`, `rebuild`, `paper-reset`, `api`, `dashboard`, `clean`, `help` | ✅ |
+| systemd service files | `deploy/minervini-daily.service` | `Type=oneshot`; `EnvironmentFile`; 30-min `TimeoutStartSec`; journal logging | ✅ |
+| systemd timer | `deploy/minervini-daily.timer` | `OnCalendar=Mon-Fri 15:35 Asia/Kolkata`; `Persistent=true`; `RandomizedDelaySec=30` | ✅ |
+| API + dashboard services | `deploy/minervini-api.service`, `deploy/minervini-dashboard.service` | `Type=simple`; `Restart=always`; uvicorn + streamlit process management | ✅ |
+| Deploy scripts | `deploy/install.sh`, `deploy/uninstall.sh` | Enable/disable all three systemd units in one command | ✅ |
+| Runbook | `RUNBOOK.md` | Daily ops; add watchlist symbol; add universe; corrupt store recovery; add new rule condition; add new data source; threshold tuning; common errors + fixes; performance benchmarks | ✅ |
+| Feature benchmark | `scripts/benchmark_features.py` | Measures `bootstrap()` + `update()` wall-clock time across 10 synthetic symbols; extrapolates to 500/2000-symbol production runs; JSON trend-tracking output to `data/benchmarks/`; exit code 1 if update target exceeded | ✅ |
+| Run history unit tests | `tests/unit/test_run_history.py` | 5 tests: full `log_run`→`finish_run` round-trip, `get_git_sha()` type/length, `get_config_hash()` 8-hex-char contract, unknown `run_id` graceful no-op, `get_last_run()` most-recent-row semantics | ✅ |
+| (Optional) Prometheus endpoint | — | **Not built** — `prometheus_client` is installed as a transitive dep but no project code exposes metrics. Mark for Phase 10 if API monitoring is needed. | ⛾ |
+| (Optional) GitHub Actions CI | — | **Not built** — `make test` local target satisfies the spec requirement. Add `.github/workflows/ci.yml` if/when the repo is pushed to GitHub. | ⛾ |
+
+---
+
 
 ### Phase 7 — Paper Trading Simulator (Weeks 17–18)
 **Goal:** Validate live signals in real-time before backtesting or going live.

@@ -49,3 +49,5 @@ htmlcov/
 node_modules/
 .next/
 out/
+
+mylist.xlsx

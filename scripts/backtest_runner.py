@@ -233,11 +233,12 @@ def main() -> None:
     end_date   = _parse_date(args.end,   "--end")
 
     if start_date >= end_date:
-        raise BacktestDataError(
-            start_date=str(start_date),
-            end_date=str(end_date),
-            reason="--start must be strictly before --end",
+        print(
+            f"ERROR: --start must be strictly before --end "
+            f"(got {start_date} \u2192 {end_date})",
+            file=sys.stderr,
         )
+        sys.exit(1)
 
     # ── Step 2: load config ───────────────────────────────────────────────────
     import yaml

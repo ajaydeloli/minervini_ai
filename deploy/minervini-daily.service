@@ -1,0 +1,29 @@
+[Unit]
+Description=Minervini AI — Daily SEPA Screen
+Documentation=https://github.com/youruser/minervini_ai
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+User=ubuntu
+Group=ubuntu
+
+WorkingDirectory=/home/ubuntu/projects/minervini_ai
+EnvironmentFile=/home/ubuntu/projects/minervini_ai/.env
+
+ExecStart=/home/ubuntu/projects/minervini_ai/.venv/bin/python \
+    /home/ubuntu/projects/minervini_ai/scripts/run_daily.py \
+    --date today
+
+# Keep stdout/stderr in the journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=minervini-daily
+
+# Give the run up to 30 minutes before systemd kills it
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

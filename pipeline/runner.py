@@ -128,6 +128,7 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
     wall_start = time.monotonic()
     result     = RunResult(run_date=context.run_date)
     status     = "success"
+    error_msg: str | None = None
     run_id: Optional[int] = None
 
     # ── Step 1: Logging setup ─────────────────────────────────────────────────
@@ -200,12 +201,14 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
             )
 
         if not context.dry_run:
+            from utils.run_meta import get_config_hash, get_git_sha
+
             run_id = _log_run(
                 run_date=context.run_date,
                 run_mode=context.mode,
                 scope=context.scope,
-                git_sha=context.git_sha(),
-                config_hash=context.config_hash(),
+                git_sha=get_git_sha(),
+                config_hash=get_config_hash(context.config_path),
                 universe_size=universe_size,
                 watchlist_size=watchlist_size,
             )
@@ -288,6 +291,7 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
             )
             results = []
             status  = "partial"
+            error_msg = f"run_screen failed: {exc}"
             log.info("Step 5: run_screen — done (partial)", duration_sec=_elapsed(t0))
     else:
         log.info("Step 5: run_screen — skipped (dry_run)")
@@ -608,6 +612,7 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
                 vcp_qualified=vcp_qualified,
                 a_plus_count=a_plus_count,
                 a_count=a_count,
+                error_msg=error_msg,
             )
             log.info(
                 "Step 12: finish_run — done",
@@ -665,7 +670,7 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
         log.info("Step 12b: paper_trading — skipped (dry_run or disabled)")
 
     # ── Step 13: Build and return RunResult ───────────────────────────────────
-    result.symbols_screened = len(symbols_to_scan)
+    result.symbols_screened = 0 if context.dry_run else len(symbols_to_scan)
     result.passed_stage2    = passed_stage2
     result.passed_tt        = passed_tt
     result.vcp_qualified    = vcp_qualified

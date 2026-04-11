@@ -47,6 +47,9 @@ class RunContext:
     config: dict
     db_path: Path
     dry_run: bool = False
+    # Path to the YAML config file that produced *config*.
+    # Used by get_config_hash() to fingerprint the live file on disk.
+    config_path: Path = Path("config/settings.yaml")
 
     # ── Optional CLI overrides (set by run_daily.py only) ────────────────────
     # When cli_symbols is provided, symbol resolution uses these directly

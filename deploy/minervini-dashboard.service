@@ -1,0 +1,37 @@
+[Unit]
+Description=Minervini AI — Streamlit Dashboard
+Documentation=https://github.com/youruser/minervini_ai
+After=network.target minervini-api.service
+Wants=network.target
+# Dashboard is nicer with the API running, but will still start without it
+BindsTo=
+
+[Service]
+Type=simple
+
+User=ubuntu
+Group=ubuntu
+
+WorkingDirectory=/home/ubuntu/projects/minervini_ai
+EnvironmentFile=/home/ubuntu/projects/minervini_ai/.env
+
+ExecStart=/home/ubuntu/projects/minervini_ai/.venv/bin/streamlit run \
+    /home/ubuntu/projects/minervini_ai/dashboard/app.py \
+    --server.port 8501 \
+    --server.headless true \
+    --server.enableCORS false \
+    --server.enableXsrfProtection false
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Keep stdout/stderr in the journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=minervini-dashboard
+
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
