@@ -479,6 +479,29 @@ def get_closed_trades(db_path: Path) -> list[Trade]:
     return [_row_to_trade(r) for r in rows]
 
 
+def mark_pyramided(db_path: Path, trade_id: int) -> None:
+    """
+    Set pyramided = 1 on an existing open position row.
+
+    Called by simulator.pyramid_position() after a pyramid add-on is opened
+    so that the original position cannot be pyramided a second time.
+
+    Raises:
+        PaperTradingError: If trade_id is not found.
+    """
+    with _connect(db_path) as conn:
+        cursor = conn.execute(
+            "UPDATE paper_positions SET pyramided = 1 WHERE id = ? AND status = 'open'",
+            (trade_id,),
+        )
+        if cursor.rowcount == 0:
+            raise PaperTradingError(
+                f"mark_pyramided: no open position with id={trade_id}",
+                trade_id=trade_id,
+            )
+    log.debug("Position marked pyramided", trade_id=trade_id)
+
+
 def reset_portfolio(db_path: Path, initial_capital: float) -> None:
     """
     Hard-reset the paper portfolio.
