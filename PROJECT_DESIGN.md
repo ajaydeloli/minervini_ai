@@ -34,7 +34,7 @@
 
 ## 🏗️ Build Status
 
-> **Last audited:** 2026-04-11 — Phase 7 complete. Paper Trading Simulator fully built and wired: portfolio (SQLite-backed), order queue (IST market-hours aware), simulator (enter/exit/pyramid/check_exits), report (PortfolioSummary + format_summary_text), all wired into pipeline/runner.py. 29 unit tests passing (1.94 s).
+> **Last audited:** 2026-04-11 — Phase 8 complete. Backtesting engine fully built: walk-forward engine (no lookahead bias), BacktestPortfolio with trailing stop + VCP floor, NSE market regime calendar, parameter sweep across [5%, 7%, 10%, 15%, fixed], BacktestMetrics (CAGR/Sharpe/drawdown/win-rate), HTML+CSV+equity-curve PNG report, `backtest_runner.py` CLI, `BacktestDataError` exception. All backtest unit tests passing.
 
 | Phase | Name | Status | Tests | Notes |
 |---|---|---|---|---|
@@ -45,7 +45,7 @@
 | **5** | Fundamentals & News | ✅ **COMPLETE** | fundamentals + news unit tests pass | Screener.in scraper + 7-day cache; 7-condition fundamental template; RSS keyword scorer; wired into scorer + pipeline |
 | **6** | LLM Narrative Layer | ✅ **COMPLETE** | llm explainer unit tests pass | All providers built; explainer wired into runner Step 5b; narrative column in HTML report; graceful degradation confirmed |
 | **7** | Paper Trading Simulator | ✅ **COMPLETE** | 29 unit tests passing | `portfolio.py` + `order_queue.py` + `simulator.py` + `report.py`; wired into `pipeline/runner.py`; IST market-hours aware; pyramiding logic |
-| **8** | Backtesting Engine | 🔲 not started | — | |
+| **8** | Backtesting Engine | ✅ **COMPLETE** | backtest unit tests passing | `engine.py` + `portfolio.py` + `metrics.py` + `regime.py` + `report.py`; `backtest_runner.py` CLI; walk-forward; trailing stop with VCP floor; NSE regime calendar; parameter sweep |
 | **9** | Hardening & Production | 🔲 not started | — | |
 | **10** | API Layer (FastAPI) | 🔲 not started | — | |
 | **11** | Streamlit Dashboard MVP | 🔲 not started | — | |

@@ -334,3 +334,24 @@ class PaperTradingError(MinerviniError):
     Raised by paper_trading/portfolio.py on bad state transitions,
     insufficient cash, or uninitialised portfolio.
     """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backtest errors
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BacktestError(MinerviniError):
+    """
+    Base for all backtesting errors.
+    Raised by backtest/metrics.py, backtest/engine.py, and related modules
+    when trade data is malformed, capital is invalid, or computation fails.
+    """
+
+
+class BacktestDataError(BacktestError):
+    """Raised when required historical data is missing for the backtest date range."""
+    def __init__(self, start_date: str, end_date: str, reason: str):
+        super().__init__(
+            f"Backtest data unavailable for {start_date} \u2192 {end_date}: {reason}",
+            start_date=start_date, end_date=end_date,
+        )
