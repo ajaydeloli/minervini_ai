@@ -34,7 +34,7 @@
 
 ## 🏗️ Build Status
 
-> **Last audited:** 2026-04-10 — Phase 5 complete. Fundamentals + news wired into scorer, HTML report, and Telegram alert.
+> **Last audited:** 2026-04-11 — Phase 6 complete. LLM narrative layer fully built and wired: all 5 providers + GeminiClient bonus, trade brief + watchlist summary templates, Step 5b in runner, narrative column in HTML report, token cost logging, graceful degradation, 12 unit tests passing.
 
 | Phase | Name | Status | Tests | Notes |
 |---|---|---|---|---|
@@ -43,7 +43,7 @@
 | **3** | Rule Engine | ✅ **COMPLETE** | 504+ passing | `screener/pipeline.py` + `screener/results.py` built here (moved from Phase 4) |
 | **4** | Reports, Charts & Alerts | ✅ **COMPLETE** | daily_watchlist, telegram, risk_reward, email, webhook tests pass | All modules built and wired; `run_daily.py` → `runner.py` ✅; `risk_reward.py` wired ✅; `email_alert.py` ✅; `webhook_alert.py` ✅; Agg backend fix ✅ |
 | **5** | Fundamentals & News | ✅ **COMPLETE** | fundamentals + news unit tests pass | Screener.in scraper + 7-day cache; 7-condition fundamental template; RSS keyword scorer; wired into scorer + pipeline |
-| **6** | LLM Narrative Layer | 🔲 not started | — | |
+| **6** | LLM Narrative Layer | ✅ **COMPLETE** | llm explainer unit tests pass | All providers built; explainer wired into runner Step 5b; narrative column in HTML report; graceful degradation confirmed |
 | **7** | Paper Trading Simulator | 🔲 not started | — | |
 | **8** | Backtesting Engine | 🔲 not started | — | |
 | **9** | Hardening & Production | 🔲 not started | — | |
@@ -1779,17 +1779,22 @@ frontend/
 ### Phase 6 — LLM Narrative Layer (Weeks 15–16)
 **Goal:** AI-generated trade briefs as an optional overlay.
 
-- [ ] `llm/llm_client.py` — abstract LLM client
-- [ ] `llm/explainer.py` — `generate_trade_brief()` + `generate_watchlist_summary()`
-- [ ] Jinja2 prompt templates (include stage, fundamentals, news in context)
-- [ ] Implement `GroqClient` (default — free, fast)
-- [ ] Implement `AnthropicClient` and `OpenAIClient`
-- [ ] Implement `OllamaClient` for local fallback
-- [ ] Implement `OpenRouterClient` (deepseek-r1:free for best reasoning)
-- [ ] Add narrative field to HTML report
-- [ ] Token cost logging per run
-- [ ] Graceful degradation (LLM failure → skip narrative, log warning)
-- [ ] **Deliverable:** HTML report includes a 3-sentence AI trade brief for each A+/A setup. Groq free tier used by default.
+**Phase 6 status: ✅ COMPLETE** — All modules built, wired, and tested. GeminiClient added as a bonus sixth provider.
+
+- [x] `llm/llm_client.py` — abstract `LLMClient` ABC + `get_llm_client()` factory
+- [x] `llm/explainer.py` — `generate_trade_brief()` + `generate_watchlist_summary()`
+- [x] Jinja2 prompt templates — `trade_brief.j2` (stage, VCP, fundamentals, news, OHLCV levels in context) + `watchlist_summary.j2`
+- [x] Implement `GroqClient` (default — `llama-3.3-70b-versatile`, free, fast)
+- [x] Implement `AnthropicClient` (`claude-haiku-4-5`) and `OpenAIClient` (`gpt-4o-mini`)
+- [x] Implement `OllamaClient` for local fallback (OpenAI-compatible endpoint)
+- [x] Implement `OpenRouterClient` (`deepseek/deepseek-r1:free` for best reasoning)
+- [x] Implement `GeminiClient` (`gemini-2.0-flash`) — bonus sixth provider
+- [x] Wire into `pipeline/runner.py` Step 5b — iterates results, loads `ohlcv_tail` from feature Parquet, calls `generate_trade_brief()`, stamps `r.narrative`, calls `generate_watchlist_summary()` for daily summary
+- [x] Add narrative field to HTML report — "Trade Brief" column in both A+/A table and All Results table; collapsible `🤖 AI Brief` details element
+- [x] Token cost logging per run — all providers log `input_tokens` + `output_tokens` via `log.debug("LLM token usage", ...)`
+- [x] Graceful degradation — every error path returns `None`; Step 5b wrapped in `try/except`; pipeline never aborts on LLM failure
+- [x] Unit tests — `tests/unit/test_llm_explainer.py` (12 tests: disabled path, quality filter, success paths, LLMProviderError, generic exception, empty ohlcv_tail, client=None, watchlist summary success/error/empty/disabled)
+- [x] **Deliverable:** HTML report includes a 3-sentence AI trade brief for each A+/A setup. Groq free tier used by default. Brief shows as collapsible `🤖 AI Brief` in the Trade Brief column; `—` when LLM is disabled or quality filtered.
 
 ---
 

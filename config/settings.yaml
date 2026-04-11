@@ -85,7 +85,7 @@ backtest:
   position_size_pct: 0.10
 
 llm:
-  enabled: false                  # enable after getting API key
+  enabled: true                  # enable after getting API key
   provider: "groq"
   model: "llama-3.3-70b-versatile"
   max_tokens: 350

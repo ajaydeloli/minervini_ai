@@ -277,6 +277,73 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
     else:
         log.info("Step 5: run_screen — skipped (dry_run)")
 
+    # ── Step 5b: LLM narrative generation ────────────────────────────────────
+    if not context.dry_run and results:
+        t0 = time.monotonic()
+        log.info("Step 5b: LLM narrative — start", count=len(results))
+        try:
+            from llm.explainer import generate_trade_brief, generate_watchlist_summary
+            import pandas as pd
+
+            only_for = context.config.get("llm", {}).get("only_for_quality", ["A+", "A"])
+            features_dir = Path(
+                context.config.get("data", {}).get("features_dir", "data/features")
+            )
+            narrative_count = 0
+
+            for r in results:
+                # Always stamp the attribute so downstream code can safely
+                # check `getattr(r, "narrative", None)` without AttributeError
+                r.narrative = None
+
+                if r.setup_quality not in only_for:
+                    continue
+
+                # Load ohlcv_tail from feature parquet
+                ohlcv_tail = pd.DataFrame()
+                try:
+                    fp = features_dir / f"{r.symbol}.parquet"
+                    if fp.exists():
+                        ohlcv_tail = (
+                            pd.read_parquet(fp)
+                            .tail(90)[["close", "high", "low", "open", "volume"]]
+                        )
+                except Exception as load_exc:
+                    log.warning(
+                        "Step 5b: could not load ohlcv_tail",
+                        symbol=r.symbol, reason=str(load_exc),
+                    )
+
+                brief = generate_trade_brief(r, ohlcv_tail, context.config)
+                r.narrative = brief
+                if brief:
+                    narrative_count += 1
+
+            # Daily summary narrative (optional — attach to run context or log)
+            try:
+                summary = generate_watchlist_summary(
+                    results, context.run_date, context.config
+                )
+                if summary:
+                    log.info("Step 5b: watchlist summary generated", length=len(summary))
+            except Exception as sum_exc:
+                log.warning("Step 5b: watchlist summary failed", reason=str(sum_exc))
+
+            log.info(
+                "Step 5b: LLM narrative — done",
+                narratives_generated=narrative_count,
+                duration_sec=_elapsed(t0),
+            )
+        except Exception as exc:
+            log.warning(
+                "Step 5b: LLM narrative failed — continuing",
+                reason=str(exc),
+                exc_info=True,
+            )
+            log.info("Step 5b: LLM narrative — done (error)", duration_sec=_elapsed(t0))
+    else:
+        log.info("Step 5b: LLM narrative — skipped (dry_run or no results)")
+
     # ── Step 6: persist_results (sepa_results table) ──────────────────────────
     t0 = time.monotonic()
     log.info("Step 6: persist_results — start", count=len(results))

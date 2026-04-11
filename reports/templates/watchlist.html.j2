@@ -194,6 +194,31 @@
     font-size: 12px;
   }
   .footer strong { color: var(--accent); }
+
+  /* ── Trade brief column ───────────────────────────────────────────── */
+  .col-brief { min-width: 200px; max-width: 340px; white-space: normal; }
+  .brief-toggle { cursor: pointer; }
+  .brief-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  .brief-label::-webkit-details-marker { display: none; }
+  .brief-text {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    white-space: normal;
+    padding: 6px 8px;
+    background: var(--surface2);
+    border-left: 2px solid var(--accent);
+    border-radius: 3px;
+  }
+  .muted-dash { color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -294,6 +319,7 @@
           <th>Risk %</th>
           <th>Fundamentals</th>
           <th>News</th>
+          <th>Trade Brief</th>
         </tr>
       </thead>
       <tbody>
@@ -315,6 +341,17 @@
           <td class="col-num">{{ fmt_pct(r.risk_pct) }}</td>
           <td>{{ fund_badge(r) }}</td>
           <td>{{ news_badge(r.get('news_score')) }}</td>
+          <td class="col-brief">
+            {% set brief = r.get('narrative') %}
+            {% if brief %}
+              <details class="brief-toggle">
+                <summary class="brief-label">🤖 AI Brief</summary>
+                <div class="brief-text">{{ brief }}</div>
+              </details>
+            {% else %}
+              <span class="muted-dash">—</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -350,6 +387,7 @@
               <th>Risk %</th>
               <th>Fundamentals</th>
               <th>News</th>
+              <th>Trade Brief</th>
             </tr>
           </thead>
           <tbody>
@@ -371,6 +409,17 @@
               <td class="col-num">{{ fmt_pct(r.risk_pct) }}</td>
               <td>{{ fund_badge(r) }}</td>
               <td>{{ news_badge(r.get('news_score')) }}</td>
+              <td class="col-brief">
+                {% set brief = r.get('narrative') %}
+                {% if brief %}
+                  <details class="brief-toggle">
+                    <summary class="brief-label">🤖 AI Brief</summary>
+                    <div class="brief-text">{{ brief }}</div>
+                  </details>
+                {% else %}
+                  <span class="muted-dash">—</span>
+                {% endif %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>
