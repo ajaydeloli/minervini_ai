@@ -322,3 +322,15 @@ class NewsFetchError(NewsError):
             + (f": {reason}" if reason else ""),
             feed_url=feed_url,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paper trading errors
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PaperTradingError(MinerviniError):
+    """
+    Base for paper-trading simulator errors.
+    Raised by paper_trading/portfolio.py on bad state transitions,
+    insufficient cash, or uninitialised portfolio.
+    """
