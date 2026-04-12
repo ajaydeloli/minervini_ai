@@ -34,7 +34,7 @@
 
 ## 🏗️ Build Status
 
-> **Last audited:** 2026-04-11 — Phase 9 complete. Hardening & production layer fully built: structured JSON logging with 30-day rotating files (`utils/logger.py`), data lineage per run (`utils/run_meta.py` → git SHA + config hash stored in `run_history`), `Makefile` with 13 targets, `systemd` service + timer files (`deploy/`), comprehensive `RUNBOOK.md`, 34 unit test files + 4 integration test files, feature benchmark script (`scripts/benchmark_features.py`). Prometheus metrics endpoint not built (marked optional in spec). No `.github/workflows` CI config (local `make test` target covers the spec requirement).
+> **Last audited:** 2026-04-12 — Phase 10 complete. API layer fully tested: 21-test suite (`tests/unit/test_api.py`) covering all 5 routers (health, stocks, watchlist, portfolio, run), dual-key auth (read vs admin), open-mode (no env keys set), and burst rate-limiting. All DB calls mocked in-memory via `unittest.mock.patch`. Missing `python-multipart` dependency identified and installed. All 20 required tests + 1 optional slow test pass in 1.33 s.
 
 | Phase | Name | Status | Tests | Notes |
 |---|---|---|---|---|
@@ -47,9 +47,24 @@
 | **7** | Paper Trading Simulator | ✅ **COMPLETE** | 29 unit tests passing | `portfolio.py` + `order_queue.py` + `simulator.py` + `report.py`; wired into `pipeline/runner.py`; IST market-hours aware; pyramiding logic |
 | **8** | Backtesting Engine | ✅ **COMPLETE** | backtest unit tests passing | `engine.py` + `portfolio.py` + `metrics.py` + `regime.py` + `report.py`; `backtest_runner.py` CLI; walk-forward; trailing stop with VCP floor; NSE regime calendar; parameter sweep |
 | **9** | Hardening & Production | ✅ **COMPLETE** | run_history, run_meta, benchmark tests pass | Prometheus endpoint not built (optional); no GitHub Actions CI (local `make test` satisfies spec); all other deliverables complete |
-| **10** | API Layer (FastAPI) | 🔲 not started | — | |
+| **10** | API Layer (FastAPI) | ✅ **COMPLETE** | 21 unit tests passing (20 required + 1 slow) | `python-multipart` installed; all routers tested with `TestClient`; DB mocked in-memory; auth + rate-limit verified |
 | **11** | Streamlit Dashboard MVP | 🔲 not started | — | |
 | **12** | Next.js Production Frontend | 🔲 not started | — | |
+
+
+### What Was Built in Phase 10
+
+| Deliverable | File | Notes | Status |
+|---|---|---|---|
+| FastAPI test suite | `tests/unit/test_api.py` | 21 tests — health, stocks, watchlist, portfolio, run, auth, rate-limit | ✅ |
+| `python-multipart` dep fix | `.venv` | Required by FastAPI form endpoints in `watchlist.py`; was missing from venv | ✅ |
+| Health router tests (4) | tests 01–04 | Status valid/degraded, meta with/without read key | ✅ |
+| Stocks router tests (4) | tests 05–08 | Top list, quality filter, symbol detail, auth guard | ✅ |
+| Watchlist router tests (6) | tests 09–14 | GET, POST valid/invalid symbol, bulk add, DELETE, auth guards | ✅ |
+| Portfolio router tests (2) | tests 15–16 | Portfolio summary + open trades filter | ✅ |
+| Run endpoint tests (2) | tests 17–18 | Admin-only 202 accepted; read-key 403 forbidden | ✅ |
+| Auth tests (2) | tests 19–20 | Wrong key → 403; open mode (no env keys set) → 200 without key | ✅ |
+| Rate-limit test (1, slow) | test 21 | 101 burst GETs → at least one 429; marked `@pytest.mark.slow` | ✅ |
 
 ### What Was Built in Phase 3
 
