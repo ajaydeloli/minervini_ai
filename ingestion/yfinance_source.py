@@ -170,6 +170,13 @@ def _clean_ohlcv(df: pd.DataFrame, symbol: str, ticker: str) -> pd.DataFrame:
     if "close" in df.columns:
         df = df[df["close"].notna()].copy()
 
+    # Drop zero-volume rows — these are exchange holidays that yfinance
+    # includes in its output (e.g. Holi, Republic Day).  A row with
+    # volume == 0 means the market was closed; keeping it would cause the
+    # volume > 0 validator to raise DataValidationError.
+    if "volume" in df.columns:
+        df = df[df["volume"] > 0].copy()
+
     # Verify all required columns are present
     missing = [col for col in OHLCV_COLUMNS if col not in df.columns]
     if missing:
@@ -357,30 +364,45 @@ class YFinanceSource(DataSource):
         symbol: str,
     ) -> pd.DataFrame:
         """
-        Thin wrapper around yfinance.download() with tenacity retry.
+        Download OHLCV from yfinance with tenacity retry.
 
-        The @retry decorator retries up to _RETRY_ATTEMPTS times on any
-        exception, waiting _RETRY_WAIT_SECONDS between attempts.
-        On final failure, it re-raises the original exception so the caller
-        can wrap it in DataFetchError.
+        Single-symbol fetches use ``yf.Ticker.history()`` — this is
+        thread-safe because each Ticker object owns its own HTTP session.
+        ``yf.download()`` (used for bulk) uses a shared internal download
+        queue in yfinance ≥ 1.0; concurrent single-symbol calls can be
+        batched together, causing each thread to receive the wrong symbol's
+        data.  Switching to ``Ticker.history()`` eliminates that race.
 
-        Note: end date is pushed forward by 1 day because yfinance's end is
-        exclusive — yfinance.download(end="2024-01-15") returns data up to
-        and including 2024-01-14.
+        Bulk fetches (list of tickers) still use ``yf.download()`` because
+        the multi-symbol path intentionally groups them in one request and
+        the caller's ``_extract_single_from_bulk`` handles the MultiIndex.
+
+        Note: yfinance end is exclusive → 1 day is added to include the
+        requested end date.
         """
-        # yfinance end is exclusive → add 1 day to include the requested end date
         import datetime as _dt
         end_inclusive = end + _dt.timedelta(days=1)
 
         try:
-            raw = yf.download(
-                tickers=tickers,
-                start=str(start),
-                end=str(end_inclusive),
-                auto_adjust=True,
-                progress=False,
-                # multi_level_index controls MultiIndex — keep default; we handle both
-            )
+            if isinstance(tickers, str):
+                # Thread-safe single-symbol path — avoids yf.download()'s
+                # shared internal queue that merges concurrent requests.
+                ticker_obj = yf.Ticker(tickers)
+                raw = ticker_obj.history(
+                    start=str(start),
+                    end=str(end_inclusive),
+                    auto_adjust=True,
+                    actions=False,
+                )
+            else:
+                # Bulk path — intentionally downloads many tickers at once.
+                raw = yf.download(
+                    tickers=tickers,
+                    start=str(start),
+                    end=str(end_inclusive),
+                    auto_adjust=True,
+                    progress=False,
+                )
         except Exception as exc:
             log.warning(
                 "yfinance download failed (will retry)",

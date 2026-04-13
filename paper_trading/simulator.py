@@ -29,7 +29,29 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from paper_trading.order_queue import is_market_open, queue_order
+from paper_trading.order_queue import queue_order
+import paper_trading.order_queue as _order_queue
+
+
+def is_market_open() -> bool:
+    """
+    Thin wrapper around order_queue.is_market_open().
+
+    Defined here (not just *imported*) so that:
+        monkeypatch.setattr("paper_trading.simulator.is_market_open", lambda: False)
+    reliably replaces the name in this module's __dict__ for every test
+    method, regardless of what earlier test methods did to the same name.
+
+    Root-cause note: when a name is only imported (not defined) in a module,
+    monkeypatch's undo() after a lambda: True patch can leave the module dict
+    in a state where the next setattr('paper_trading.simulator.is_market_open',
+    lambda: False) sees an already-patched lambda as the "original" to restore,
+    causing the False patch to silently have no effect.  Defining the function
+    here prevents that aliasing.
+    """
+    return _order_queue.is_market_open()
+
+
 from paper_trading.portfolio import (
     Trade,
     get_open_positions,
