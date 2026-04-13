@@ -14,6 +14,13 @@ Usage examples
   # Bootstrap the full universe from universe.yaml (default)
   python scripts/bootstrap.py
 
+  # Explicit equivalent of the default — "config" and "list" are identical
+  python scripts/bootstrap.py --universe config
+  python scripts/bootstrap.py --universe list
+
+  # Bootstrap the full Nifty 500 placeholder universe
+  python scripts/bootstrap.py --universe nifty500
+
   # Bootstrap only the SQLite watchlist
   python scripts/bootstrap.py --watchlist-only
 
@@ -28,6 +35,9 @@ Usage examples
 
   # 10 years of history, 8 parallel workers
   python scripts/bootstrap.py --years 10 --workers 8
+
+  # Use a specific date as the "today" anchor (end of the download window)
+  python scripts/bootstrap.py --universe config --date 2024-01-15
 
   # Universe + watchlist combined, custom paths
   python scripts/bootstrap.py --universe all --db data/custom.db --output-dir data/processed
@@ -94,12 +104,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--universe",
-        choices=["nifty500", "list", "all"],
+        choices=["nifty500", "config", "list", "all"],
         default="list",
         help=(
-            'Universe source: "list" (default, uses config/universe.yaml mode), '
+            'Universe source: "config" or "list" (default — both read config/universe.yaml), '
             '"nifty500" (Nifty 500 placeholder), '
-            '"all" (universe + watchlist combined).'
+            '"all" (universe + watchlist combined). '
+            '"config" and "list" are identical; either form is accepted.'
         ),
     )
     parser.add_argument(
@@ -175,6 +186,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Download and store OHLCV only — skip Phase 2 feature computation. "
             "Useful when you want to inspect raw data before committing to a full bootstrap."
+        ),
+    )
+    parser.add_argument(
+        "--date",
+        dest="date",
+        metavar="DATE",
+        default="today",
+        help=(
+            'End-of-window anchor date in ISO format (YYYY-MM-DD) or "today" (default). '
+            "Sets the right edge of the download window; --years counts back from this date. "
+            "Example: --date 2024-01-15 downloads history ending on 2024-01-15."
         ),
     )
 
@@ -388,10 +410,12 @@ def main() -> None:
     Bootstrap entry point.
 
     Flow:
+        0.  Resolve run_date from --date (ISO string or "today").
         1.  Parse CLI arguments.
         2.  Resolve the symbol list (--symbols overrides; --watchlist-only
             limits scope; --universe controls universe source).
-        3.  Compute start_date = today_ist() - relativedelta(years=args.years).
+            "config" and "list" are both treated as scope="universe".
+        3.  Compute start_date = run_date - relativedelta(years=args.years).
         4.  Validate the output directory is reachable (fatal on failure).
         5.  Print pre-run summary table.
         6.  If --dry-run: print symbol list and exit 0.
@@ -403,8 +427,8 @@ def main() -> None:
 
     Exit codes:
         0 — success or dry-run
-        1 — fatal error (bad symbols, missing universe, unreachable output dir)
-             or KeyboardInterrupt
+        1 — fatal error (bad --date, bad symbols, missing universe, unreachable
+             output dir) or KeyboardInterrupt
     """
     # ── Logging setup (must happen before any log call) ──────────────────────
     setup_logging()
@@ -412,7 +436,20 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    run_date: date = today_ist()
+    # ── Step 0: Resolve run_date from --date flag ─────────────────────────────
+    if args.date == "today":
+        run_date: date = today_ist()
+    else:
+        try:
+            run_date = date.fromisoformat(args.date)
+        except ValueError:
+            print(
+                f"ERROR: --date value '{args.date}' is not a valid ISO date "
+                "(expected YYYY-MM-DD or 'today').",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     log.info("Bootstrap starting", run_date=str(run_date))
 
     # ── Step 1: Parse --symbols ───────────────────────────────────────────────
@@ -431,7 +468,7 @@ def main() -> None:
     elif args.universe == "all":
         scope = "all"
     else:
-        # "list" and "nifty500" both resolve via universe.yaml
+        # "config", "list", and "nifty500" all resolve via universe.yaml
         scope = "universe"
 
     # ── Step 3: Resolve symbols ───────────────────────────────────────────────

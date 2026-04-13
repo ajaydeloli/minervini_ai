@@ -160,15 +160,14 @@ python scripts/run_daily.py --symbols "DIXON,CDSL,DMART" --date 2024-06-01 --dry
 
 ## 3. Bootstrap — `scripts/bootstrap.py`
 
-> **Phase 1 — planned, not yet built.**
-
 Downloads full price history (5–10 years) for all symbols and computes all
 features from scratch. Run once on first setup, and again if feature files are
 corrupted.
 
 ```bash
-# Bootstrap all symbols defined in config/universe.yaml
+# Bootstrap all symbols defined in config/universe.yaml  (two equivalent forms)
 python scripts/bootstrap.py --universe config
+python scripts/bootstrap.py --universe list   # identical to --universe config
 
 # Bootstrap the full Nifty 500
 python scripts/bootstrap.py --universe nifty500
@@ -179,9 +178,29 @@ python scripts/bootstrap.py --symbols "RELIANCE,TCS,INFY"
 # Force a full recompute even if feature files already exist
 python scripts/bootstrap.py --universe config --force
 
-# Use a specific date as the "today" anchor
+# Use a specific date as the "today" anchor (end of the download window)
 python scripts/bootstrap.py --universe config --date 2024-01-15
+
+# Bootstrap universe + watchlist combined
+python scripts/bootstrap.py --universe all
+
+# Dry run — see what would be downloaded without writing anything
+python scripts/bootstrap.py --universe config --dry-run
+
+# 10 years of history, 8 parallel workers
+python scripts/bootstrap.py --universe config --years 10 --workers 8
+
+# Download OHLCV only, skip feature computation
+python scripts/bootstrap.py --universe config --skip-features
 ```
+
+> **`--universe` values:** `config` and `list` are identical — both read
+> `config/universe.yaml`. `nifty500` uses the Nifty 500 placeholder. `all`
+> combines universe + watchlist.
+
+> **`--date`:** Defaults to today (IST). Accepts any ISO date (`YYYY-MM-DD`)
+> to set the right edge of the download window; `--years` counts back from
+> that date.
 
 > **Estimated time:** 5–15 min for 500 symbols, 60–90 min for 2 000 symbols.
 > Run overnight or over a weekend. The daily incremental update afterwards
@@ -827,6 +846,14 @@ python scripts/run_daily.py --dry-run
 ── Servers ───────────────────────────────────────────────────────────
 uvicorn api.main:app --reload --port 8000    FastAPI dev server
 streamlit run dashboard/app.py --server.port 8501    Streamlit
+
+── Bootstrap ─────────────────────────────────────────────────────────
+python scripts/bootstrap.py --universe config        universe from universe.yaml
+python scripts/bootstrap.py --universe list          identical to --universe config
+python scripts/bootstrap.py --universe all           universe + watchlist
+python scripts/bootstrap.py --universe config --date 2024-01-15
+python scripts/bootstrap.py --symbols "RELIANCE,TCS" --force
+python scripts/bootstrap.py --universe config --dry-run
 
 ── Make ──────────────────────────────────────────────────────────────
 make daily           run today's screen

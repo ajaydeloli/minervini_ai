@@ -352,8 +352,31 @@ source .venv/bin/activate
 Run once on initial setup. Downloads 5–10 years of OHLCV and computes all features.
 
 ```bash
+# Bootstrap universe defined in config/universe.yaml  (two equivalent forms)
 python scripts/bootstrap.py --universe config    # ~5–15 min for 500 symbols
+python scripts/bootstrap.py --universe list      # identical — "config" and "list" are aliases
+
+# Bootstrap universe + watchlist together
+python scripts/bootstrap.py --universe all
+
+# Use a historical anchor date (end of download window; --years counts back from here)
+python scripts/bootstrap.py --universe config --date 2024-01-15
+
+# Force re-download even when processed files already exist
+python scripts/bootstrap.py --universe config --force
+
+# Dry-run — print what would be downloaded, no writes
+python scripts/bootstrap.py --universe config --dry-run
+
+# Download OHLCV only, skip feature computation
+python scripts/bootstrap.py --universe config --skip-features
 ```
+
+> **`--universe` values:** `config` and `list` are identical (both read `config/universe.yaml`).
+> `nifty500` uses the Nifty 500 placeholder. `all` adds the SQLite watchlist on top.
+>
+> **`--date`:** Defaults to today (IST). Pass any `YYYY-MM-DD` date to anchor the right
+> edge of the download window — useful for reproducible historical setups.
 
 ### 8.2 Daily screen
 
