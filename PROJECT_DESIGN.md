@@ -2,7 +2,7 @@
 # Minervini SEPA Stock Analysis System
 
 > **Version:** 1.5.0  
-> **Last Updated:** 2026-04-11  
+> **Last Updated:** 2026-04-13  
 > **Methodology:** Mark Minervini's Specific Entry Point Analysis (SEPA)  
 > **Target Market:** NSE / Indian Equities (adaptable to any market)
 
@@ -34,7 +34,7 @@
 
 ## 🏗️ Build Status
 
-> **Last audited:** 2026-04-12 — Phase 10 complete. API layer fully tested: 21-test suite (`tests/unit/test_api.py`) covering all 5 routers (health, stocks, watchlist, portfolio, run), dual-key auth (read vs admin), open-mode (no env keys set), and burst rate-limiting. All DB calls mocked in-memory via `unittest.mock.patch`. Missing `python-multipart` dependency identified and installed. All 20 required tests + 1 optional slow test pass in 1.33 s.
+> **Last audited:** 2026-04-13 — Phase 12 complete.
 
 | Phase | Name | Status | Tests | Notes |
 |---|---|---|---|---|
@@ -48,9 +48,29 @@
 | **8** | Backtesting Engine | ✅ **COMPLETE** | backtest unit tests passing | `engine.py` + `portfolio.py` + `metrics.py` + `regime.py` + `report.py`; `backtest_runner.py` CLI; walk-forward; trailing stop with VCP floor; NSE regime calendar; parameter sweep |
 | **9** | Hardening & Production | ✅ **COMPLETE** | run_history, run_meta, benchmark tests pass | Prometheus endpoint not built (optional); no GitHub Actions CI (local `make test` satisfies spec); all other deliverables complete |
 | **10** | API Layer (FastAPI) | ✅ **COMPLETE** | 21 unit tests passing (20 required + 1 slow) | `python-multipart` installed; all routers tested with `TestClient`; DB mocked in-memory; auth + rate-limit verified |
-| **11** | Streamlit Dashboard MVP | 🔲 not started | — | |
-| **12** | Next.js Production Frontend | 🔲 not started | — | |
+| **11** | Streamlit Dashboard MVP | ✅ **COMPLETE** | No unit tests (UI layer — Streamlit convention) | `dashboard/app.py` + 5 pages + 3 components + `deploy/minervini-dashboard.service`; dark-theme, watchlist ★ badge, file-upload, [Run Now] trigger, candlestick + MA + VCP chart, TT checklist, fund. scorecard, paper portfolio, backtest viewer |
+| **12** | Next.js Production Frontend | ✅ **COMPLETE** | No unit tests (UI layer) |
 
+
+### What Was Built in Phase 12
+
+| Deliverable | File | Notes | Status |
+|---|---|---|---|
+| Vercel config | `frontend/vercel.json` | `buildCommand`, `outputDirectory`, `framework`, env secret references (`@minervini_api_url`, `@minervini_read_key`, `@minervini_admin_key`) | ✅ |
+| Next.js config migration | `frontend/next.config.mjs` | Converted `next.config.ts` → `.mjs` for Next.js 14 compatibility; rewrites proxy + image remote patterns preserved | ✅ |
+| Password gate middleware | `frontend/middleware.ts` | Optional HttpOnly cookie gate; activates only when `NEXT_PUBLIC_REQUIRE_AUTH=true`; no-op otherwise | ✅ |
+| Login page | `frontend/app/login/page.tsx` | Minimal password form; submits to `/api/auth/login`; redirects to `/` on success | ✅ |
+| Login Route Handler | `frontend/app/api/auth/login/route.ts` | `POST /api/auth/login`; validates against `SITE_PASSWORD` env var; sets HttpOnly cookie (7-day TTL) | ✅ |
+| Dashboard mobile fix | `frontend/app/page.tsx` | Best setups table: Stage, RS, VCP, BO columns hidden on mobile (`hidden sm:table-cell`); only Symbol, Score, Quality shown | ✅ |
+| Symbol page mobile fix | `frontend/app/screener/[symbol]/page.tsx` | Tab labels abbreviated on mobile: `Trend Template→TT`, `Fundamentals→Fund`, `AI Brief→AI`; tooltip formatter type-fixed | ✅ |
+| EquityCurve min-height | `frontend/components/EquityCurve.tsx` | Chart wrapper div gets `min-h-[250px] h-[250px]`; `ResponsiveContainer` uses `height="100%"` | ✅ |
+| 404 page | `frontend/app/not-found.tsx` | "This symbol or page doesn't exist." with ← Back to Screener button | ✅ |
+| Global error boundary | `frontend/app/error.tsx` | Client component; shows error message + digest + [Retry] + [Go to Dashboard] buttons | ✅ |
+| Screener skeleton | `frontend/app/screener/loading.tsx` | Page-level pulse skeleton: header, filter bar, result count, 12 table rows | ✅ |
+| Watchlist skeleton | `frontend/app/watchlist/loading.tsx` | Three-section skeleton: add-symbols card, watchlist table rows, results placeholder | ✅ |
+| Portfolio skeleton | `frontend/app/portfolio/loading.tsx` | 2×3 KPI grid, 250px chart placeholder, tab bar, 5 trade rows | ✅ |
+| README rewrite | `frontend/README.md` | Prerequisites, local dev setup, env var table, optional auth gate, Vercel deployment steps, architecture diagram, scripts table, project structure | ✅ |
+| Production build | — | `npm run build` → 0 TypeScript errors; 12 routes compiled (7 static, 3 dynamic, 2 API) | ✅ |
 
 ### What Was Built in Phase 10
 
@@ -65,6 +85,21 @@
 | Run endpoint tests (2) | tests 17–18 | Admin-only 202 accepted; read-key 403 forbidden | ✅ |
 | Auth tests (2) | tests 19–20 | Wrong key → 403; open mode (no env keys set) → 200 without key | ✅ |
 | Rate-limit test (1, slow) | test 21 | 101 burst GETs → at least one 429; marked `@pytest.mark.slow` | ✅ |
+
+### What Was Built in Phase 11
+
+| Deliverable | File | Notes | Status |
+|---|---|---|---|
+| Streamlit entry point | `dashboard/app.py` | Dark-theme CSS injection (JetBrains Mono, CSS vars); sidebar with market status bar, last-run info, quick stats (A+/A/watchlist counts); home page KPI row + A+ preview table | ✅ |
+| Watchlist page | `dashboard/pages/01_Watchlist.py` | File upload widget (CSV/JSON/XLSX/TXT); manual symbol entry; persistent watchlist table with ★ badge; [Run Watchlist Now] button → `POST /api/v1/run`; today's results with watchlist symbols first | ✅ |
+| Screener page | `dashboard/pages/02_Screener.py` | Full universe results table; quality/stage/RS/sector filters; export to CSV; watchlist filter checkbox | ✅ |
+| Stock deep-dive page | `dashboard/pages/03_Stock.py` | Cached PNG → live mplfinance fallback; score gauge + stage + RS badge; tabbed detail: TT checklist, fundamentals, news sentiment, LLM brief, score history | ✅ |
+| Portfolio page | `dashboard/pages/04_Portfolio.py` | 5 KPI cards (total value, return%, win rate, open positions, realised P&L); open positions table; closed trades history; cumulative P&L equity curve | ✅ |
+| Backtest page | `dashboard/pages/05_Backtest.py` | Backtest equity curve with regime shading (Bull/Bear/Sideways); per-regime stats table; parameter sweep comparison | ✅ |
+| Charts component | `dashboard/components/charts.py` | `render_candlestick_chart()` — mplfinance + MA ribbon + VCP gold zone + stage label + quality badge + entry/stop hlines; `render_cached_chart()` — serve pre-built PNGs; `render_equity_curve()` — cumulative P&L; `render_backtest_equity_curve()` — regime-shaded portfolio curve | ✅ |
+| Tables component | `dashboard/components/tables.py` | `render_sepa_results_table()` — pandas Styler + quality/score colour coding + ★ watchlist row highlight + WL filter checkbox; `render_portfolio_table()` — open positions with P&L colour; `render_trades_history_table()` — closed trades + R-Multiple colour; `render_backtest_summary_table()` — regime breakdown | ✅ |
+| Metrics component | `dashboard/components/metrics.py` | `render_score_gauge()` — metric + progress bar + quality badge; `render_trend_template_checklist()` — 8-condition two-column grid; `render_fundamental_scorecard()` — 7-condition checklist; `render_vcp_summary()` — grade + metric cards; `render_run_summary_kpis()` — 4 KPI row; `render_portfolio_kpis()` — 5 KPI row | ✅ |
+| systemd service | `deploy/minervini-dashboard.service` | `Type=simple; Restart=always`; `streamlit run dashboard/app.py --server.port 8501 --server.headless true`; depends on `minervini-api.service` | ✅ |
 
 ### What Was Built in Phase 3
 

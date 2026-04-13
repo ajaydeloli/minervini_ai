@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@minervini_api_url",
+    "NEXT_PUBLIC_API_READ_KEY": "@minervini_read_key",
+    "API_ADMIN_KEY": "@minervini_admin_key"
+  }
+}
