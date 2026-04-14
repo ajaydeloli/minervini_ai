@@ -73,7 +73,7 @@ BANNER_TITLE: str = "Minervini Bootstrap"
 # ─────────────────────────────────────────────────────────────────────────────
 
 from ingestion.universe_loader import RunSymbols, resolve_symbols
-from ingestion.yfinance_source import YFinanceSource
+from ingestion import get_data_source
 from ingestion.validator import check_sufficient_history, validate
 from storage.parquet_store import exists, row_count, write
 from storage.sqlite_store import finish_run, init_db, log_run
@@ -263,6 +263,7 @@ def _bootstrap_symbol(
     output_dir: Path,
     force: bool,
     print_lock: threading.Lock,
+    config: dict,
 ) -> dict:
     """
     Download, validate, and persist OHLCV history for a single symbol.
@@ -299,7 +300,7 @@ def _bootstrap_symbol(
 
     # ── Step b: Fetch ─────────────────────────────────────────────────────────
     try:
-        df = YFinanceSource().fetch(symbol, start=start_date, end=end_date)
+        df = get_data_source(config).fetch(symbol, start=start_date, end=end_date)
     except Exception as exc:
         with print_lock:
             print(f"[FAIL] {symbol} — fetch error: {exc}")

@@ -2,41 +2,45 @@
  * app/api/proxy/watchlist/clear/route.ts
  * ────────────────────────────────────────
  * Next.js Route Handler that proxies DELETE /api/v1/watchlist to the FastAPI
- * backend using the server-side API_ADMIN_KEY environment variable.
+ * backend, clearing every item from the watchlist in one shot.
  *
- * The admin key is NEVER exposed to the client bundle — it lives only in the
- * server-side environment and is injected here at request time.
+ * WHY adminFetch?
+ * ───────────────
+ * "Clear all" is a destructive, irreversible operation — it wipes the entire
+ * watchlist with a single request. FastAPI therefore gates it behind the
+ * elevated admin API key (X-API-Key: <admin_key>) rather than the public read
+ * key that is baked into the client bundle (NEXT_PUBLIC_API_READ_KEY).
  *
- * Called by the watchlist page's "Clear All" action via:
+ * adminFetch reads process.env.API_ADMIN_KEY at request time, inside this
+ * server-side Route Handler, so the key is NEVER included in the browser
+ * bundle and cannot be extracted by a client.
+ *
+ * Called by the watchlist UI via:
  *   fetch("/api/proxy/watchlist/clear", { method: "DELETE" })
  */
 
 import { NextResponse } from "next/server";
+// adminFetch uses process.env.API_ADMIN_KEY — server-side only, never bundled.
 import { adminFetch, ApiError } from "@/lib/api";
 
 export async function DELETE(): Promise<NextResponse> {
   try {
-    const result = await adminFetch<unknown>("/api/v1/watchlist", {
-      method: "DELETE",
-    });
+    // Proxy the destructive clear-all to FastAPI with the admin key.
+    await adminFetch<unknown>("/api/v1/watchlist", { method: "DELETE" });
 
-    return NextResponse.json(result);
+    return NextResponse.json({ success: true });
   } catch (err) {
     if (err instanceof ApiError) {
       return NextResponse.json(
-        {
-          success: false,
-          data: null,
-          error: err.message,
-          detail: err.detail,
-        },
+        { success: false, error: err.message },
         { status: err.status >= 400 ? err.status : 502 }
       );
     }
 
+    // Never leak internal details to the client.
     console.error("[proxy/watchlist/clear] Unexpected error:", err);
     return NextResponse.json(
-      { success: false, data: null, error: "Internal proxy error" },
+      { success: false, error: "Internal proxy error" },
       { status: 502 }
     );
   }

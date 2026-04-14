@@ -103,6 +103,73 @@ def _elapsed(t0: float) -> float:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Preflight config audit
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _preflight_warnings(config: dict, log) -> None:  # noqa: ANN001
+    """
+    Inspect *config* and emit a log.warning() for every major subsystem
+    that is disabled.  Never raises; never blocks the pipeline.
+
+    Called as Step 1b immediately after logging is set up so operators
+    see all disabled-subsystem warnings at the very top of every run log.
+
+    Args:
+        config: The dict loaded from settings.yaml (context.config).
+        log:    A StructuredLogger (or any object with a .warning method).
+    """
+    # ── Per-subsystem checks ─────────────────────────────────────────────────
+    _CHECKS: list[tuple[str, bool, str]] = [
+        (
+            "news.enabled",
+            bool(config.get("news", {}).get("enabled", False)),
+            "News scoring disabled — set news.enabled: true and add NEWSDATA_API_KEY",
+        ),
+        (
+            "paper_trading.enabled",
+            bool(config.get("paper_trading", {}).get("enabled", False)),
+            "Paper trading disabled — set paper_trading.enabled: true to track signals",
+        ),
+        (
+            "alerts.telegram.enabled",
+            bool(config.get("alerts", {}).get("telegram", {}).get("enabled", False)),
+            "Telegram alerts disabled — daily signals will not be delivered",
+        ),
+        (
+            "alerts.email.enabled",
+            bool(config.get("alerts", {}).get("email", {}).get("enabled", False)),
+            "Email alerts disabled — set alerts.email.enabled: true for email delivery",
+        ),
+        (
+            "llm.enabled",
+            bool(config.get("llm", {}).get("enabled", False)),
+            "LLM narrative disabled — trade briefs will not be generated",
+        ),
+        (
+            "fundamentals.enabled",
+            bool(config.get("fundamentals", {}).get("enabled", False)),
+            "Fundamental scoring disabled — fundamental_score will be 0 for all results",
+        ),
+    ]
+
+    for key_path, is_enabled, message in _CHECKS:
+        if not is_enabled:
+            log.warning(message, subsystem=key_path)
+
+    # ── Combined alert-channel check ─────────────────────────────────────────
+    news_on     = bool(config.get("news",   {}).get("enabled", False))
+    telegram_on = bool(config.get("alerts", {}).get("telegram", {}).get("enabled", False))
+    email_on    = bool(config.get("alerts", {}).get("email",    {}).get("enabled", False))
+
+    if not news_on and not telegram_on and not email_on:
+        log.warning(
+            "No alert channels are enabled — pipeline results will not be"
+            " delivered to any destination",
+            subsystem="alerts.all",
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -140,6 +207,11 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
     except Exception as exc:
         log.warning("Step 1: setup_logging failed — continuing", reason=str(exc))
     log.info("Step 1: setup_logging — done", duration_sec=_elapsed(t0))
+
+    # ── Step 1b: Preflight config audit ──────────────────────────────────────
+    log.info("Step 1b: preflight config audit — start")
+    _preflight_warnings(context.config, log)
+    log.info("Step 1b: preflight config audit — done")
 
     for _w in warn_missing_env_vars(context.config):
         log.warning(_w)

@@ -25,13 +25,14 @@ Design notes
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from api.deps import require_read_key
+from api.deps import get_db_path, require_read_key
 from api.schemas.common import APIResponse, ok
 from storage.sqlite_store import get_last_run, get_top_results, get_watchlist
 from utils.logger import get_logger
@@ -48,6 +49,12 @@ _CONFIG_PATH = Path("config/settings.yaml")
 
 # Run statuses that map to health "degraded"
 _DEGRADED_STATUSES = frozenset({"partial", "failed", "running"})
+
+# Data subdirectories required for full operation
+_DATA_SUBDIRS = [
+    "raw", "processed", "features", "fundamentals", "news",
+    "metadata", "benchmarks", "paper_trading", "charts", "reports",
+]
 
 
 # ── GET /api/v1/health ───────────────────────────────────────────────────────
@@ -82,12 +89,22 @@ def health_check() -> APIResponse[dict]:
 
         if last_run is None:
             log.warning("Health check: no run history found in database")
+            _read_key  = os.environ.get("API_READ_KEY",  "").strip()
+            _admin_key = os.environ.get("API_ADMIN_KEY", "").strip()
+            if _read_key and _admin_key:
+                _auth_mode = "full"
+            elif _read_key:
+                _auth_mode = "read_key_only"
+            else:
+                _auth_mode = "open"
             return ok({
                 "status": "no_data",
                 "last_run_date": None,
                 "last_run_status": None,
                 "last_run_duration_sec": None,
                 "api_version": _API_VERSION,
+                "auth_mode": _auth_mode,
+                "db_exists": get_db_path().exists(),
             })
 
         run_status: str | None = last_run.get("status")
@@ -107,22 +124,44 @@ def health_check() -> APIResponse[dict]:
             last_run_status=run_status,
         )
 
+        # ── Auth mode ─────────────────────────────────────────────────────────
+        _read_key  = os.environ.get("API_READ_KEY",  "").strip()
+        _admin_key = os.environ.get("API_ADMIN_KEY", "").strip()
+        if _read_key and _admin_key:
+            auth_mode = "full"
+        elif _read_key:
+            auth_mode = "read_key_only"
+        else:
+            auth_mode = "open"
+
         return ok({
             "status": health_status,
             "last_run_date": last_run.get("run_date"),
             "last_run_status": run_status,
             "last_run_duration_sec": last_run.get("duration_sec"),
             "api_version": _API_VERSION,
+            "auth_mode": auth_mode,
+            "db_exists": get_db_path().exists(),
         })
 
     except Exception:  # noqa: BLE001 — intentional broad catch; health must never raise
         log.error("Health check: unexpected exception", exc_info=True)
+        _read_key  = os.environ.get("API_READ_KEY",  "").strip()
+        _admin_key = os.environ.get("API_ADMIN_KEY", "").strip()
+        if _read_key and _admin_key:
+            auth_mode = "full"
+        elif _read_key:
+            auth_mode = "read_key_only"
+        else:
+            auth_mode = "open"
         return ok({
             "status": "error",
             "last_run_date": None,
             "last_run_status": None,
             "last_run_duration_sec": None,
             "api_version": _API_VERSION,
+            "auth_mode": auth_mode,
+            "db_exists": get_db_path().exists(),
         })
 
 
@@ -167,6 +206,7 @@ def meta(
         "a_count": None,
         "git_sha": None,
         "config_hash": None,
+        "data_dirs_ok": None,
     }
 
     # ── Last run: universe_size + last_screen_date ─────────────────────────
@@ -216,6 +256,15 @@ def meta(
         data["config_hash"] = get_config_hash(_CONFIG_PATH)
     except Exception:  # noqa: BLE001
         log.warning("Meta: failed to compute config hash", exc_info=True)
+
+    # ── Data directories ───────────────────────────────────────────────────
+    try:
+        _data_root = Path("data")
+        data["data_dirs_ok"] = all(
+            (_data_root / d).exists() for d in _DATA_SUBDIRS
+        )
+    except Exception:  # noqa: BLE001
+        log.warning("Meta: failed to check data directories", exc_info=True)
 
     log.info(
         "Meta endpoint served",

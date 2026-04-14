@@ -54,6 +54,18 @@ class MissingConfigKeyError(ConfigError):
         )
 
 
+class ConfigurationError(ConfigError):
+    """
+    Raised when a config key holds an unrecognised or unsupported value.
+
+    Example: universe.source = "csv" is not implemented — raise this instead
+    of silently falling back to a default, so operators notice misconfiguration
+    immediately rather than running the wrong data source.
+    """
+    def __init__(self, message: str, key: str = "", value: str = ""):
+        super().__init__(message, key=key, value=value)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Data / ingestion errors
 # ─────────────────────────────────────────────────────────────────────────────

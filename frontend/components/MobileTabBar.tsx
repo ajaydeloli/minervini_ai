@@ -13,6 +13,7 @@ import {
   ScanLine,
   Star,
   Briefcase,
+  FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -28,6 +29,7 @@ const TAB_ITEMS: TabItem[] = [
   { href: "/screener",  label: "Screener",  icon: ScanLine },
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/portfolio", label: "Portfolio", icon: Briefcase },
+  { href: "/backtest",  label: "Backtest",  icon: FlaskConical },
 ];
 
 function isActive(href: string, pathname: string): boolean {

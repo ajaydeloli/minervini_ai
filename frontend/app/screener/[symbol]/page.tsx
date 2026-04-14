@@ -13,9 +13,6 @@
  *   [Tab bar: Trend Template | VCP | Fundamentals | AI Brief]
  *
  * Mobile: columns stack vertically; chart first, gauge + pills below, tabs last.
- *
- * TODO (Phase 13): Replace generateMockOHLCV() with a real fetch once
- * GET /api/v1/stock/{symbol}/ohlcv is added to api/routers/stocks.py
  */
 "use client";
 
@@ -47,72 +44,7 @@ import {
   addToWatchlist,
   fetchOHLCV,
 } from "@/lib/api";
-import type { SEPAResult, StockHistoryPoint } from "@/lib/types";
-
-// ─── Mock OHLCV generator ────────────────────────────────────────────────────
-// TODO (Phase 13): Remove this and fetch GET /api/v1/stock/{symbol}/ohlcv instead.
-
-function generateMockOHLCV(
-  stock: SEPAResult,
-  days = 120
-): { ohlcv: OHLCVPoint[]; mas: MAPoint[] } {
-  const entry = stock.entry_price ?? 100;
-  const stop  = stock.stop_loss  ?? entry * 0.93;
-  const range = entry - stop;
-
-  // Deterministic seed from entry_price so it's stable across re-renders
-  let seed = Math.round(entry * 1000);
-  function rand() {
-    seed = (seed * 1664525 + 1013904223) & 0xffffffff;
-    return (seed >>> 0) / 0xffffffff;
-  }
-
-  const ohlcv: OHLCVPoint[] = [];
-  const mas:   MAPoint[]    = [];
-
-  let price = entry * (0.85 + rand() * 0.1);
-  const now = Math.floor(Date.now() / 1000);
-  const DAY = 86400;
-
-  // Buffers for MA calculation
-  const closes: number[] = [];
-
-  function sma(n: number): number | null {
-    if (closes.length < n) return null;
-    const slice = closes.slice(-n);
-    return slice.reduce((a, b) => a + b, 0) / n;
-  }
-
-  for (let i = days; i >= 0; i--) {
-    const t = now - i * DAY;
-    // Skip weekends
-    const dow = new Date(t * 1000).getDay();
-    if (dow === 0 || dow === 6) continue;
-
-    const dailyMove = (rand() - 0.48) * range * 0.4;
-    const open  = price;
-    price = Math.max(stop * 0.9, price + dailyMove);
-    const close = price;
-    const wick  = range * 0.15 * rand();
-    const high  = Math.max(open, close) + wick;
-    const low   = Math.min(open, close) - wick * 0.5;
-    const volume = Math.round((500_000 + rand() * 2_000_000));
-
-    ohlcv.push({ time: t as unknown as import("lightweight-charts").Time, open, high, low, close, volume });
-    closes.push(close);
-
-    mas.push({
-      time:   t as unknown as import("lightweight-charts").Time,
-      sma10:  sma(10),
-      sma21:  sma(21),
-      sma50:  sma(50),
-      sma150: sma(150),
-      sma200: sma(200),
-    });
-  }
-
-  return { ohlcv, mas };
-}
+import type { StockHistoryPoint } from "@/lib/types";
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 
@@ -220,6 +152,35 @@ export default function StockDeepDivePage() {
     { refreshInterval: 120_000 }
   );
 
+  // Real OHLCV data from API
+  const { data: rawOhlcv } = useSWR(
+    symbol ? `ohlcv/${symbol}` : null,
+    () => fetchOHLCV(symbol),
+    { refreshInterval: 120_000 }
+  );
+
+  // Transform OHLCVPoint[] → CandlestickChart props format
+  const { ohlcv, mas } = React.useMemo(() => {
+    if (!rawOhlcv || rawOhlcv.length === 0) return { ohlcv: [], mas: [] };
+    const ohlcv: OHLCVPoint[] = rawOhlcv.map((p) => ({
+      time: p.date as unknown as import("lightweight-charts").Time,
+      open: p.open,
+      high: p.high,
+      low: p.low,
+      close: p.close,
+      volume: p.volume,
+    }));
+    const mas: MAPoint[] = rawOhlcv.map((p) => ({
+      time:   p.date as unknown as import("lightweight-charts").Time,
+      sma10:  null,
+      sma21:  p.sma_21,
+      sma50:  p.sma_50,
+      sma150: p.sma_150,
+      sma200: p.sma_200,
+    }));
+    return { ohlcv, mas };
+  }, [rawOhlcv]);
+
   const inWatchlist = watchlistItems.some((w) => w.symbol === symbol);
   const [wlLoading, setWlLoading] = React.useState(false);
 
@@ -232,12 +193,6 @@ export default function StockDeepDivePage() {
       setWlLoading(false);
     }
   }
-
-  // ── Derived chart data ─────────────────────────────────────────────────────
-  const { ohlcv, mas } = React.useMemo(
-    () => (stock ? generateMockOHLCV(stock) : { ohlcv: [], mas: [] }),
-    [stock]
-  );
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (stockLoading) return <DeepDiveSkeleton />;

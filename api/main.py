@@ -72,11 +72,39 @@ async def _lifespan(application: FastAPI):  # noqa: ARG001
     setup_logging()
 
     db_path: Path = get_db_path()
+    _db_existed = db_path.exists()  # capture BEFORE init_db creates the file
     init_db(db_path)
 
     cfg = get_config()
     for _w in warn_missing_env_vars(cfg):
         log.warning(_w)
+
+    # ── Auth mode warning ─────────────────────────────────────────────────────
+    read_key  = os.environ.get("API_READ_KEY",  "").strip()
+    admin_key = os.environ.get("API_ADMIN_KEY", "").strip()
+    if not read_key and not admin_key:
+        log.warning(
+            "API running in OPEN MODE — no API keys configured. "
+            "All endpoints are publicly accessible. "
+            "Set API_READ_KEY and API_ADMIN_KEY in .env for production."
+        )
+    elif not admin_key:
+        log.warning("API_ADMIN_KEY is not set. POST /api/v1/run is unprotected.")
+
+    # ── Database existence check ──────────────────────────────────────────────
+    if not _db_existed:
+        log.warning(
+            "Database not found at %s. Run: python scripts/bootstrap.py "
+            "to initialise the data store. API will return empty results.",
+            str(db_path),
+        )
+    else:
+        log.info(
+            "Database found",
+            path=str(db_path),
+            size_mb=round(db_path.stat().st_size / 1e6, 2),
+        )
+
     host: str = cfg.get("api", {}).get("host", "0.0.0.0")
     port: int = cfg.get("api", {}).get("port", 8000)
     git_sha: str = get_git_sha()

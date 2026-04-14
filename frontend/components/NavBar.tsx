@@ -14,6 +14,7 @@ import {
   ScanLine,
   Star,
   Briefcase,
+  FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -30,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/screener",  label: "Screener",  icon: ScanLine },
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/portfolio", label: "Portfolio", icon: Briefcase },
+  { href: "/backtest",  label: "Backtest",  icon: FlaskConical },
 ];
 
 /* ── Active-route check ───────────────────────────────────────────────────── */
