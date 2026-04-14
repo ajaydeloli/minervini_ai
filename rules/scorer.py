@@ -82,6 +82,37 @@ _DEFAULT_THRESHOLDS: dict[str, int] = {
     "c":      40,
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Weight validation — run once on first use, not on every evaluate() call
+# ─────────────────────────────────────────────────────────────────────────────
+
+_weights_validated: bool = False
+
+
+def _validate_score_weights(weights: dict) -> None:
+    """Raise ValueError if the scoring weights do not sum to 1.0 (±float epsilon).
+
+    Called once (guarded by *_weights_validated*) the first time _get_weights()
+    is invoked.  This ensures a misconfigured settings.yaml is caught at
+    startup rather than silently producing wrong scores.
+
+    Parameters
+    ──────────
+    weights : dict[str, float]
+        The resolved weight dict (defaults merged with config overrides).
+
+    Raises
+    ──────
+    ValueError
+        If ``sum(weights.values())`` is outside the range [0.999, 1.001].
+    """
+    total = sum(weights.values())
+    if not (0.999 <= total <= 1.001):  # allow float epsilon
+        raise ValueError(
+            f"scoring.weights must sum to 1.0, got {total:.4f}. "
+            f"Check config/settings.yaml scoring.weights section."
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SEPAResult dataclass
@@ -158,12 +189,22 @@ def _safe_float(val: Any) -> Optional[float]:
 
 
 def _get_weights(config: dict) -> dict[str, float]:
-    """Extract scoring weights from config, falling back to defaults."""
+    """Extract scoring weights from config, falling back to defaults.
+
+    On the first call the resolved weights are validated via
+    *_validate_score_weights* to ensure they sum to 1.0.  Subsequent calls
+    skip validation (guarded by the module-level *_weights_validated* flag)
+    so that hot-path evaluate() calls pay no extra cost.
+    """
+    global _weights_validated
     raw = config.get("scoring", {}).get("weights", {})
     weights = dict(_DEFAULT_WEIGHTS)
     for key in weights:
         if key in raw:
             weights[key] = float(raw[key])
+    if not _weights_validated:
+        _validate_score_weights(weights)
+        _weights_validated = True
     return weights
 
 

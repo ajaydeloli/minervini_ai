@@ -29,15 +29,19 @@ trend_template:
   min_rs_rating: 70
 
 vcp:
-  detector: "rule_based"
-  min_contractions: 2
-  max_contractions: 5
-  require_declining_depth: true
-  require_vol_contraction: true
-  min_weeks: 3
-  max_weeks: 52
-  tightness_pct: 10.0
-  max_depth_pct: 50.0
+  detector: "rule_based"         # rule_based | cnn (cnn reserved Phase 12+)
+  min_contractions: 2             # minimum number of contraction legs to qualify
+  max_contractions: 5             # maximum number of contraction legs (informational)
+  require_declining_depth: true   # each successive leg must be shallower than the previous
+  require_vol_contraction: true   # last-leg avg volume must be below first-leg avg volume
+  min_weeks: 3                    # minimum base length in weeks
+  max_weeks: 52                   # maximum base length in weeks
+  tightness_pct: 10.0             # max final-leg depth (%) — tighter = higher quality
+  max_depth_pct: 50.0             # max any-leg depth (%) — deeper = failed VCP
+  vol_contraction_ratio: 0.7      # last-leg vol / first-leg vol must be < this
+  min_contraction_depth_pct: 3.0  # minimum % pullback to count as a contraction leg
+  pivot_sensitivity: 0.05         # ZigZag threshold as fraction of price (5%) — maps to pivot_window in pivot.py
+  pivot_window: 5                 # bars on each side of a candidate bar to confirm a swing pivot
 
 fundamentals:
   enabled: true
@@ -56,6 +60,13 @@ news:
 
 scoring:
   weights:
+    # Must sum to 1.0. Adjust to shift emphasis between signals.
+    # rs_rating: most predictive of forward returns
+    # trend: Minervini 8-condition filter (hard gate at Stage 2)
+    # vcp: pattern quality — tighter base = better risk/reward
+    # volume: breakout confirmation + accumulation signal
+    # fundamental: EPS/ROE/sales (soft gate by default)
+    # news: sentiment overlay (smallest weight — most noisy)
     rs_rating: 0.30
     trend: 0.25
     vcp: 0.25

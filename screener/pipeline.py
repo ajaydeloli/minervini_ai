@@ -32,6 +32,8 @@ Public API
 from __future__ import annotations
 
 import datetime
+import multiprocessing
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -284,7 +286,19 @@ def run_screen(
     results: list[SEPAResult] = []
     errors = 0
 
-    with ProcessPoolExecutor(max_workers=effective_workers) as executor:
+    # ProcessPoolExecutor note: on macOS/Windows, mp_context="spawn" is required
+    # because the default "fork" is unsafe. On Linux, fork is used for speed.
+    # All arguments to _screen_single must be picklable (no DB connections,
+    # no open file handles, no threading.Lock objects).
+
+    # Use spawn context on macOS/Windows to avoid fork-safety issues;
+    # fork is safe and faster on Linux.
+    if sys.platform == "linux":
+        executor_ctx = None  # uses default (fork on Linux)
+    else:
+        executor_ctx = multiprocessing.get_context("spawn")
+
+    with ProcessPoolExecutor(max_workers=effective_workers, mp_context=executor_ctx) as executor:
         futures = {
             executor.submit(_screen_single, symbol, run_date, config): symbol
             for symbol in universe

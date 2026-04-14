@@ -268,7 +268,7 @@ Minimum required to run a daily screen (Phases 1–5): **nothing** — yfinance 
 ```bash
 python -c "import ingestion; import features; import rules; print('All packages importable ✓')"
 python -c "import yfinance as yf; df=yf.download('RELIANCE.NS', period='5d', progress=False); print('yfinance OK —', len(df), 'rows')"
-pytest tests/ -v --tb=short   # should show 500+ passing
+pytest tests/ -v --tb=short   # should show 922 passing
 ```
 
 For full first-time setup instructions (OS packages, venv, config files, VS Code remote, systemd), see **[DEV_SETUP.md](DEV_SETUP.md)**.
