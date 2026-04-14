@@ -413,3 +413,121 @@ class TestNewsDisabled:
 
         mock_parse.assert_not_called()
         assert result == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GROUP 7 — _llm_rescore()
+# ─────────────────────────────────────────────────────────────────────────────
+
+from ingestion.news import _llm_rescore
+from utils.exceptions import LLMProviderError
+
+
+class TestLLMRescore:
+    """_llm_rescore(articles, symbol, config) -> list[dict]"""
+
+    # Minimal config that has LLM enabled so the function reaches the client.
+    _LLM_CFG: dict = {
+        "llm": {"enabled": True, "provider": "groq"},
+        "data": {"news_dir": "/tmp/minervini_test_llm"},
+        "news": {},
+    }
+
+    def _make_article(self, title: str = "Infosys beats estimates", score: float = 0.0, sentiment: float = 0.0) -> dict:
+        return {
+            "title": title,
+            "summary": "Strong quarterly results.",
+            "url": "https://example.com/a/1",
+            "source": "example.com",
+            "published": "",
+            "sentiment": sentiment,
+            "score": score,
+        }
+
+    def test_happy_path_updates_sentiment_and_score(self):
+        """LLM returns valid JSON → article sentiment and score are updated."""
+        mock_client = MagicMock()
+        mock_client.complete.return_value = '{"sentiment": 0.8, "reason": "positive earnings"}'
+
+        article = self._make_article(score=0.0, sentiment=0.0)
+
+        with patch("llm.llm_client.get_llm_client", return_value=mock_client):
+            result = _llm_rescore([article], "INFY", self._LLM_CFG)
+
+        assert result[0]["sentiment"] == 0.8
+        assert result[0]["score"] == 80
+
+    def test_provider_error_preserves_original_scores_and_logs_warning(self):
+        """LLM raises LLMProviderError → scores unchanged, warning logged."""
+        mock_client = MagicMock()
+        mock_client.complete.side_effect = LLMProviderError("groq", "quota")
+
+        article = self._make_article(score=55.0, sentiment=0.55)
+        original_score = article["score"]
+        original_sentiment = article["sentiment"]
+
+        with patch("llm.llm_client.get_llm_client", return_value=mock_client):
+            with patch("ingestion.news.log") as mock_log:
+                result = _llm_rescore([article], "INFY", self._LLM_CFG)
+
+        # Original values must be intact
+        assert result[0]["score"] == original_score
+        assert result[0]["sentiment"] == original_sentiment
+
+        # A warning must have been emitted
+        mock_log.warning.assert_called_once()
+        call_kwargs = mock_log.warning.call_args
+        # First positional arg is the message
+        assert "LLM rescore failed for article" in call_kwargs[0][0]
+
+    def test_llm_disabled_returns_articles_unchanged(self):
+        """llm.enabled=False → articles returned as-is, client never instantiated."""
+        config = {**self._LLM_CFG, "llm": {"enabled": False}}
+        article = self._make_article(score=42.0, sentiment=0.42)
+
+        with patch("llm.llm_client.get_llm_client") as mock_factory:
+            result = _llm_rescore([article], "INFY", config)
+
+        mock_factory.assert_not_called()
+        assert result[0]["score"] == 42.0
+
+    def test_json_decode_error_preserves_scores(self):
+        """LLM returns malformed JSON → scores unchanged, warning logged."""
+        mock_client = MagicMock()
+        mock_client.complete.return_value = "not valid json at all"
+
+        article = self._make_article(score=30.0, sentiment=0.3)
+
+        with patch("llm.llm_client.get_llm_client", return_value=mock_client):
+            with patch("ingestion.news.log") as mock_log:
+                result = _llm_rescore([article], "RELIANCE", self._LLM_CFG)
+
+        assert result[0]["score"] == 30.0
+        mock_log.warning.assert_called_once()
+
+    def test_markdown_fenced_json_is_parsed_correctly(self):
+        """LLM wraps response in backtick fences → still parsed correctly."""
+        mock_client = MagicMock()
+        mock_client.complete.return_value = (
+            "```json\n"
+            '{"sentiment": -0.5, "reason": "probe news"}\n'
+            "```"
+        )
+
+        article = self._make_article(score=0.0, sentiment=0.0)
+
+        with patch("llm.llm_client.get_llm_client", return_value=mock_client):
+            result = _llm_rescore([article], "SBIN", self._LLM_CFG)
+
+        assert result[0]["sentiment"] == -0.5
+        assert result[0]["score"] == -50
+
+    def test_empty_article_list_returns_empty(self):
+        """No articles → empty list returned, client still instantiated but complete not called."""
+        mock_client = MagicMock()
+
+        with patch("llm.llm_client.get_llm_client", return_value=mock_client):
+            result = _llm_rescore([], "TCS", self._LLM_CFG)
+
+        assert result == []
+        mock_client.complete.assert_not_called()

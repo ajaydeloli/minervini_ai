@@ -38,13 +38,60 @@ from starlette.requests import Request
 from api.deps import require_read_key
 from api.rate_limit import READ_LIMIT, limiter
 from api.schemas.common import APIResponse, err, ok
-from api.schemas.stock import StockDetail, StockHistory, StockSummary
+from api.schemas.stock import OHLCVPoint, StockDetail, StockHistory, StockSummary
 from storage.sqlite_store import get_results_for_date, get_symbol_history
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["stocks"])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Symbol metadata loader (Gap 5 — graceful fallback when CSV absent)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SYMBOL_INFO_PATH = "data/metadata/symbol_info.csv"
+
+
+def _load_symbol_metadata() -> "dict[str, dict]":
+    """
+    Load data/metadata/symbol_info.csv into a dict keyed by symbol.
+
+    Returns an empty dict when the file does not yet exist (e.g. before
+    the first bootstrap run) rather than raising, so that all stock
+    endpoints degrade gracefully with sector="" instead of crashing.
+
+    Returns:
+        Mapping of symbol → {name, sector, industry, market_cap_cr, currency}.
+    """
+    import pandas as pd
+
+    try:
+        df = pd.read_csv(_SYMBOL_INFO_PATH)
+        return {
+            row["symbol"]: {
+                "name": row.get("name", ""),
+                "sector": row.get("sector", ""),
+                "industry": row.get("industry", ""),
+                "market_cap_cr": row.get("market_cap_cr", 0.0),
+                "currency": row.get("currency", ""),
+            }
+            for _, row in df.iterrows()
+        }
+    except FileNotFoundError:
+        log.warning(
+            "symbol_info.csv not found — sector metadata unavailable",
+            path=_SYMBOL_INFO_PATH,
+            hint="Run 'python scripts/bootstrap.py' to generate it.",
+        )
+        return {}
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "Could not load symbol_info.csv — returning empty metadata",
+            path=_SYMBOL_INFO_PATH,
+            reason=str(exc),
+        )
+        return {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Quality tier ordering (most → least selective)
@@ -456,3 +503,108 @@ def get_stock_history(
             exc_info=True,
         )
         return err(f"Unexpected error: {exc}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /api/v1/stock/{symbol}/ohlcv
+# ─────────────────────────────────────────────────────────────────────────────
+
+_OHLCV_COLUMNS = ["open", "high", "low", "close", "volume"]
+_SMA_COLUMNS   = ["sma_50", "sma_200", "sma_21", "sma_150"]
+_FEATURES_DIR  = "data/features"
+
+
+@router.get(
+    "/stock/{symbol}/ohlcv",
+    response_model=APIResponse[list[OHLCVPoint]],
+    summary="OHLCV price history with SMAs for a single symbol",
+    description=(
+        "Returns the last *days* daily bars for the symbol from "
+        "data/features/{symbol}.parquet, including open, high, low, close, "
+        "volume, and the four SMA columns (sma_50, sma_200, sma_21, sma_150) "
+        "where present. SMA values are null during the indicator warm-up "
+        "period or when the column is absent from the parquet. "
+        "Returns HTTP 404 when no feature file exists for the symbol."
+    ),
+)
+@limiter.limit(READ_LIMIT)
+def get_stock_ohlcv(
+    request: Request,
+    symbol: str,
+    days: int = Query(
+        default=120,
+        ge=1,
+        le=500,
+        description="Number of most-recent trading days to return (1–500).",
+    ),
+    _key: str = Depends(require_read_key),
+) -> APIResponse[list[OHLCVPoint]]:
+    import pandas as pd
+
+    symbol = symbol.upper().strip()
+    log.debug("GET /stock/{symbol}/ohlcv", symbol=symbol, days=days)
+
+    parquet_path = f"{_FEATURES_DIR}/{symbol}.parquet"
+
+    try:
+        df = pd.read_parquet(parquet_path)
+    except FileNotFoundError:
+        return APIResponse(
+            success=False,
+            data=None,
+            error=f"No data for {symbol}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error(
+            "GET /stock/{symbol}/ohlcv — parquet read failed",
+            symbol=symbol,
+            path=parquet_path,
+            exc_info=True,
+        )
+        return err(f"Failed to read feature data for {symbol}: {exc}")
+
+    try:
+        # Ensure the index is a proper DatetimeIndex so .date works reliably.
+        if not isinstance(df.index, pd.DatetimeIndex):
+            if "date" in df.columns:
+                df = df.set_index(pd.to_datetime(df["date"]))
+            else:
+                df.index = pd.to_datetime(df.index)
+
+        # Take the last `days` rows (oldest → newest).
+        df = df.tail(days)
+
+        points: list[OHLCVPoint] = []
+        for idx, row in df.iterrows():
+            # Resolve optional SMA columns — None when column absent or NaN.
+            def _sma(col: str) -> float | None:
+                if col not in df.columns:
+                    return None
+                val = row[col]
+                return None if pd.isna(val) else float(val)
+
+            points.append(
+                OHLCVPoint(
+                    date=idx.date().isoformat(),
+                    open=float(row["open"]),
+                    high=float(row["high"]),
+                    low=float(row["low"]),
+                    close=float(row["close"]),
+                    volume=int(row["volume"]),
+                    sma_50=_sma("sma_50"),
+                    sma_200=_sma("sma_200"),
+                    sma_21=_sma("sma_21"),
+                    sma_150=_sma("sma_150"),
+                )
+            )
+
+        meta = {"symbol": symbol, "days": days, "total": len(points)}
+        return ok(points, meta=meta)
+
+    except Exception as exc:  # noqa: BLE001
+        log.error(
+            "GET /stock/{symbol}/ohlcv — serialisation failed",
+            symbol=symbol,
+            exc_info=True,
+        )
+        return err(f"Unexpected error building OHLCV response: {exc}")

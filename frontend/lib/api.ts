@@ -16,9 +16,13 @@
 
 import type {
   APIResponse,
+  BacktestReport,
+  BacktestRunSummary,
   BulkAddResult,
+  EquityCurvePoint,
   HealthResponse,
   MetaResponse,
+  OHLCVPoint,
   PortfolioSummary,
   RunScope,
   SEPAResult,
@@ -313,4 +317,37 @@ export async function triggerRun(
   }
 
   return res.json();
+}
+
+// ─── Backtest endpoints ────────────────────────────────────────────────────
+
+/** GET /api/v1/backtest/runs */
+export async function fetchBacktestRuns(): Promise<BacktestRunSummary[]> {
+  return apiFetch<BacktestRunSummary[]>("/api/v1/backtest/runs");
+}
+
+/** GET /api/v1/backtest/runs/{runId}/summary */
+export async function fetchBacktestReport(runId: string): Promise<BacktestReport> {
+  return apiFetch<BacktestReport>(
+    `/api/v1/backtest/runs/${encodeURIComponent(runId)}/summary`
+  );
+}
+
+/** GET /api/v1/backtest/equity-curve?run_id={runId} */
+export async function fetchBacktestEquityCurve(
+  runId: string
+): Promise<EquityCurvePoint[]> {
+  return apiFetch<EquityCurvePoint[]>(
+    `/api/v1/backtest/equity-curve?run_id=${encodeURIComponent(runId)}`
+  );
+}
+
+/** GET /api/v1/stock/{symbol}/ohlcv?days={days} */
+export async function fetchOHLCV(
+  symbol: string,
+  days = 120
+): Promise<OHLCVPoint[]> {
+  return apiFetch<OHLCVPoint[]>(
+    `/api/v1/stock/${encodeURIComponent(symbol)}/ohlcv?days=${days}`
+  );
 }

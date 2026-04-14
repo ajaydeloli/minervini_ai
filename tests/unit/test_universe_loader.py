@@ -28,7 +28,7 @@ from ingestion.universe_loader import (
     resolve_symbols,
     validate_symbol,
 )
-from utils.exceptions import InvalidSymbolError, UniverseLoadError, WatchlistParseError
+from utils.exceptions import DataFetchError, InvalidSymbolError, UniverseLoadError, WatchlistParseError
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -166,6 +166,53 @@ class TestLoadUniverseYaml:
         result = load_universe_yaml(p)
         assert isinstance(result, list)
         assert len(result) > 0
+
+    def test_nifty500_mode_uses_bhav_fetch_universe(self, tmp_path: Path, monkeypatch):
+        """When NSEBhavSource.fetch_universe() succeeds, its symbols are returned."""
+        fake_symbols = [f"SYM{i:04d}" for i in range(50)]
+
+        import ingestion.nse_bhav as nse_bhav_module
+
+        class _FakeBhavSource:
+            def fetch_universe(self):
+                return fake_symbols
+
+        monkeypatch.setattr(nse_bhav_module, "NSEBhavSource", _FakeBhavSource)
+
+        p = _write_yaml(tmp_path, {"mode": "nifty500"})
+        result = load_universe_yaml(p)
+
+        assert result == sorted(fake_symbols)
+        assert len(result) == 50
+        # Must NOT be the 20-symbol placeholder
+        assert "RELIANCE" not in result
+
+    def test_nifty500_mode_falls_back_on_fetch_error(self, tmp_path: Path, monkeypatch, caplog):
+        """When fetch_universe() raises DataFetchError, the placeholder is returned
+        and a WARNING is emitted."""
+        import logging
+        import ingestion.nse_bhav as nse_bhav_module
+        from ingestion.universe_loader import _NIFTY500_PLACEHOLDER
+
+        class _BrokenBhavSource:
+            def fetch_universe(self):
+                raise DataFetchError(
+                    source="nse_bhav", symbol="(universe)", reason="network timeout"
+                )
+
+        monkeypatch.setattr(nse_bhav_module, "NSEBhavSource", _BrokenBhavSource)
+
+        p = _write_yaml(tmp_path, {"mode": "nifty500"})
+
+        with caplog.at_level(logging.WARNING):
+            result = load_universe_yaml(p)
+
+        assert result == sorted(_NIFTY500_PLACEHOLDER)
+        assert len(result) == 20
+        # A WARNING must have been logged about the fallback
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("fallback" in msg.lower() or "_NIFTY500_PLACEHOLDER" in msg
+                   for msg in warning_messages)
 
     def test_unknown_mode_raises(self, tmp_path: Path):
         p = _write_yaml(tmp_path, {"mode": "foobar"})

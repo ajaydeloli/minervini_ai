@@ -433,6 +433,14 @@ def main() -> None:
     # ── Logging setup (must happen before any log call) ──────────────────────
     setup_logging()
 
+    # ── Startup guard: ensure all required data/ subdirectories exist ─────────
+    _data_root = Path(__file__).resolve().parent.parent / "data"
+    for _sub in (
+        "raw", "processed", "features", "fundamentals", "news",
+        "metadata", "benchmarks", "paper_trading", "charts", "reports",
+    ):
+        (_data_root / _sub).mkdir(parents=True, exist_ok=True)
+
     parser = _build_parser()
     args = parser.parse_args()
 
@@ -682,6 +690,16 @@ def main() -> None:
             )
     # --- END PHASE 2 ---
 
+    # ── Symbol metadata (Gap 5 fix) ─────────────────────────────────────────
+    from ingestion.universe_loader import generate_symbol_metadata
+    meta_path = Path("data/metadata/symbol_info.csv")
+    if not meta_path.exists() or args.force:
+        log.info("Generating symbol metadata (sector/industry/mktcap)...")
+        generate_symbol_metadata(symbols_to_bootstrap, meta_path)
+        log.info("Symbol metadata written", path=str(meta_path))
+    else:
+        log.info("Symbol metadata already exists, skipping", path=str(meta_path))
+
     # ── Step 10: Final summary ────────────────────────────────────────────────
     n_ok      = sum(1 for r in results if r and r.get("status") == "ok")
     n_skipped = sum(1 for r in results if r and r.get("status") == "skipped")
@@ -726,4 +744,6 @@ def main() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()

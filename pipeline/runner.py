@@ -47,6 +47,7 @@ from typing import Optional
 from pipeline.context import RunContext
 from utils.exceptions import TelegramAlertError
 from utils.logger import get_logger, setup_logging
+from utils.env_check import warn_missing_env_vars
 
 log = get_logger(__name__)
 
@@ -139,6 +140,9 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
     except Exception as exc:
         log.warning("Step 1: setup_logging failed — continuing", reason=str(exc))
     log.info("Step 1: setup_logging — done", duration_sec=_elapsed(t0))
+
+    for _w in warn_missing_env_vars(context.config):
+        log.warning(_w)
 
     # ── Step 2: Resolve symbols ───────────────────────────────────────────────
     # Done before log_run so universe_size/watchlist_size are available.

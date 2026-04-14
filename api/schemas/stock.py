@@ -140,6 +140,45 @@ class StockHistory(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# OHLCVPoint — single row in GET /stock/{symbol}/ohlcv
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OHLCVPoint(BaseModel):
+    """
+    One daily bar returned by GET /api/v1/stock/{symbol}/ohlcv.
+
+    Sourced from data/features/{symbol}.parquet.  SMA columns are nullable
+    because they are absent during the warm-up period at the start of history
+    (e.g. sma_200 is None for the first 199 rows) and also when the parquet
+    was generated without that column present.
+
+    Fields
+    ──────
+    date    : ISO-8601 date string, e.g. "2024-01-15".
+    open    : Opening price.
+    high    : Intraday high.
+    low     : Intraday low.
+    close   : Closing price.
+    volume  : Trade volume (shares / units).
+    sma_50  : 50-day simple moving average; None if not available.
+    sma_200 : 200-day simple moving average; None if not available.
+    sma_21  : 21-day simple moving average; None if not available.
+    sma_150 : 150-day simple moving average; None if not available.
+    """
+
+    date:    str
+    open:    float
+    high:    float
+    low:     float
+    close:   float
+    volume:  int
+    sma_50:  float | None = None
+    sma_200: float | None = None
+    sma_21:  float | None = None
+    sma_150: float | None = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # WatchlistEntry — single row in GET /watchlist
 # ─────────────────────────────────────────────────────────────────────────────
 

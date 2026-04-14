@@ -83,6 +83,28 @@ log = get_logger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Data-directory bootstrap guard
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _ensure_data_dirs() -> None:
+    """Create all required data/ subdirectories if they do not already exist."""
+    _root = _PROJECT_ROOT / "data"
+    for _sub in (
+        "raw",
+        "processed",
+        "features",
+        "fundamentals",
+        "news",
+        "metadata",
+        "benchmarks",
+        "paper_trading",
+        "charts",
+        "reports",
+    ):
+        (_root / _sub).mkdir(parents=True, exist_ok=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Argument parsing
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -317,6 +339,7 @@ def main() -> None:
     """
     # ── Logging setup (must happen before any log call) ──────────────────────
     setup_logging()
+    _ensure_data_dirs()
 
     parser = _build_parser()
     args = parser.parse_args()
@@ -481,4 +504,6 @@ def main() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()

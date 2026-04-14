@@ -39,7 +39,7 @@ from urllib.parse import urlparse
 import feedparser
 import yaml
 
-from utils.exceptions import NewsFetchError
+from utils.exceptions import LLMError, NewsFetchError
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -308,12 +308,42 @@ def _llm_rescore(
         )
         return articles
 
-    # Phase 5 stub — LLM client not yet implemented.
-    log.debug(
-        "LLM re-scoring deferred to Phase 6",
-        symbol=symbol,
-        articles=len(articles),
-    )
+    from llm.llm_client import get_llm_client  # lazy import avoids circular deps
+
+    client = get_llm_client(config)
+    if client is None:
+        log.debug("LLM client unavailable — skipping re-scoring", symbol=symbol)
+        return articles
+
+    count = 0
+    for article in articles:
+        prompt = (
+            f"You are a financial news sentiment analyser for Indian equities.\n"
+            f"Is the following news article positive, negative, or neutral for"
+            f" the stock symbol {symbol}?\n"
+            f"Reply ONLY with a valid JSON object, no explanation:\n"
+            f'{{"sentiment": <float from -1.0 to 1.0>, "reason": "<one sentence max>"}}\n'
+            f"Article: {article['title']}. {article.get('summary', '')}"
+        )
+        try:
+            response = client.complete(prompt, max_tokens=120)
+            # Strip markdown code fences that some models emit
+            cleaned = response.strip().strip("`")
+            if cleaned.lower().startswith("json"):
+                cleaned = cleaned[4:].lstrip()
+            parsed = json.loads(cleaned)
+            sentiment = float(parsed["sentiment"])
+            article["sentiment"] = sentiment
+            article["score"] = round(sentiment * 100)
+            count += 1
+        except (LLMError, json.JSONDecodeError, KeyError, ValueError) as exc:
+            log.warning(
+                "LLM rescore failed for article",
+                symbol=symbol,
+                reason=str(exc),
+            )
+
+    log.debug("LLM rescore complete", symbol=symbol, articles_rescored=count)
     return articles
 
 

@@ -53,6 +53,7 @@ from utils.exceptions import (
 )
 
 from utils.logger import get_logger, setup_logging
+from utils.env_check import warn_missing_env_vars
 
 from utils.date_utils import (
     is_trading_day,
@@ -106,6 +107,8 @@ __all__ = [
     "AlertError", "TelegramAlertError", "EmailAlertError",
     # logger
     "get_logger", "setup_logging",
+    # env_check
+    "warn_missing_env_vars",
     # date_utils
     "is_trading_day", "prev_trading_day", "next_trading_day",
     "trading_days_between", "count_trading_days",

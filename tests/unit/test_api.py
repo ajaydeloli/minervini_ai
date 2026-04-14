@@ -231,8 +231,9 @@ def _reset_run_event():
     """
     Clear the _run_in_progress threading.Event before and after every test
     so the /run endpoint always starts from a known state.
+    The Event now lives in api.routers.run (moved from api.main in Gap 6).
     """
-    from api.main import _run_in_progress
+    from api.routers.run import _run_in_progress
     _run_in_progress.clear()
     yield
     _run_in_progress.clear()
@@ -612,3 +613,164 @@ def test_21_rate_limit_triggers_429_after_burst(client):
         f"Expected at least one 429 from rate limiter after 101 requests; "
         f"got status codes: {sorted(set(status_codes))}"
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Run router — Gap 6 tests  (tests 22–23)
+# Verify that POST /api/v1/run goes through the proper APIRouter in
+# api/routers/run.py (and therefore through the rate limiter), not through
+# a bare @app.post() that would bypass slowapi entirely.
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_22_run_scope_watchlist(client):
+    """
+    POST /api/v1/run with body {"scope": "watchlist"} and a valid admin key
+    → 202 Accepted, success=True, data.scope == "watchlist".
+
+    The background thread function is patched so the real pipeline never
+    executes; we only verify the HTTP acceptance handshake and envelope shape.
+    """
+    with patch("api.routers.run._run_pipeline_in_background") as mock_bg:
+        resp = client.post(
+            "/api/v1/run",
+            json={"scope": "watchlist"},
+            headers=ADMIN_HEADERS,
+        )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"]["scope"] == "watchlist"
+    assert body["data"]["status"] == "queued"
+
+
+def test_23_run_scope_universe(client):
+    """
+    POST /api/v1/run with body {"scope": "universe"} and a valid admin key
+    → 202 Accepted, success=True.
+
+    Confirms that the "universe" scope is accepted and routed correctly
+    through the new APIRouter (not the old bare @app.post binding).
+    The background thread is patched to prevent real pipeline execution.
+    """
+    with patch("api.routers.run._run_pipeline_in_background"):
+        resp = client.post(
+            "/api/v1/run",
+            json={"scope": "universe"},
+            headers=ADMIN_HEADERS,
+        )
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"]["scope"] == "universe"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Backtest router  (tests 24–27)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Shared fake DB row for a completed backtest run
+_BACKTEST_RUN_ROW = {
+    "id":           42,
+    "run_date":     "2025-01-10",
+    "run_mode":     "backtest",
+    "scope":        "all",
+    "status":       "success",
+    "duration_sec": 45.2,
+    "a_plus_count": 3,
+    "a_count":      5,
+    "passed_stage2": 120,
+    "passed_tt":     60,
+    "vcp_qualified": 18,
+    "error_msg":     None,
+    "created_at":   "2025-01-10T09:00:00",
+    "finished_at":  "2025-01-10T09:00:45",
+}
+
+
+def test_24_backtest_runs_returns_list_of_run_dicts(client):
+    """
+    GET /api/v1/backtest/runs with valid read key → 200, success=True,
+    data is a list, each item has a 'run_id' key matching the DB row id.
+
+    get_run_history is patched at the router's import namespace so no
+    real SQLite database is touched.
+    """
+    with patch("api.routers.backtest.get_run_history", return_value=[_BACKTEST_RUN_ROW]):
+        resp = client.get("/api/v1/backtest/runs", headers=READ_HEADERS)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert isinstance(body["data"], list)
+    assert len(body["data"]) == 1
+    assert body["data"][0]["run_id"] == 42
+    assert body["data"][0]["status"] == "success"
+    assert body["data"][0]["a_plus_count"] == 3
+
+
+def test_25_backtest_summary_returns_report_dict(client):
+    """
+    GET /api/v1/backtest/runs/42/summary with valid read key → 200, success=True,
+    data contains the keys from the mocked JSON report.
+
+    _read_report_file is patched at the router's namespace so no file is
+    ever read from disk.
+    """
+    mock_report = {
+        "total_trades": 10,
+        "win_rate": 62.5,
+        "max_drawdown_pct": -8.3,
+        "cagr_pct": 24.1,
+    }
+    with patch(
+        "api.routers.backtest._read_report_file",
+        return_value=mock_report,
+    ):
+        resp = client.get("/api/v1/backtest/runs/42/summary", headers=READ_HEADERS)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"]["total_trades"] == 10
+    assert body["data"]["win_rate"] == 62.5
+    assert body["meta"]["run_id"] == "42"
+
+
+def test_26_backtest_summary_invalid_id_returns_404(client):
+    """
+    GET /api/v1/backtest/runs/invalid_id/summary with valid read key → 404.
+
+    _read_report_file is patched to raise FileNotFoundError, which the
+    endpoint converts into an HTTP 404 response.  The test verifies that
+    missing-file cases never bubble up as 500.
+    """
+    with patch(
+        "api.routers.backtest._read_report_file",
+        side_effect=FileNotFoundError("no such file"),
+    ):
+        resp = client.get(
+            "/api/v1/backtest/runs/invalid_id/summary",
+            headers=READ_HEADERS,
+        )
+
+    assert resp.status_code == 404
+
+
+def test_27_backtest_runs_no_data_returns_empty_list_not_500(client):
+    """
+    GET /api/v1/backtest/runs when no backtest runs exist → 200, success=True,
+    data is an empty list.
+
+    Verifies that a completely empty run_history table (get_run_history
+    returns []) is handled gracefully and does NOT cause a 500.
+    """
+    with patch("api.routers.backtest.get_run_history", return_value=[]):
+        resp = client.get("/api/v1/backtest/runs", headers=READ_HEADERS)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"] == []
+    assert body["meta"]["total"] == 0

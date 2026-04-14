@@ -98,8 +98,15 @@ def load_universe_yaml(
 
     Mode handling:
         "list"     → returns the explicit 'symbols' list from the file
-        "nifty500" → placeholder top-20 (real scraper added in a later phase)
-        "nse_all"  → same placeholder (real scraper added in a later phase)
+        "nifty500" → downloads today's NSE Bhavcopy via NSEBhavSource and
+                     returns all SERIES=="EQ" symbols (~1 800–2 000).
+                     NOTE: this is NOT a filtered Nifty-500 list — it is all
+                     equities traded today on NSE.  For a true 500-stock
+                     universe, use mode: "list" with a curated universe.yaml.
+                     Falls back to _NIFTY500_PLACEHOLDER on any fetch error.
+        "nse_all"  → identical to "nifty500" — fetches the full EQ universe
+                     from today's Bhavcopy and falls back to placeholder on
+                     failure.
 
     Args:
         path: Path to the universe YAML file.
@@ -140,12 +147,26 @@ def load_universe_yaml(
         symbols = _clean_symbol_list(raw, source=str(path))
 
     elif mode in ("nifty500", "nse_all"):
-        log.warning(
-            f"Universe mode '{mode}' is a placeholder — returning top-20 hardcoded list. "
-            "Implement a real scraper to expand this.",
-            mode=mode,
-        )
-        symbols = sorted(_NIFTY500_PLACEHOLDER)
+        # NOTE (nifty500): NSEBhavSource.fetch_universe() returns ALL EQ-series
+        # symbols (~1 800–2 000), not exactly 500.  For a true Nifty-500
+        # filtered universe, switch to mode: "list" with a curated universe.yaml.
+        # Fetching the real list is still far better than the 20-symbol placeholder.
+        try:
+            from ingestion.nse_bhav import NSEBhavSource
+            symbols = NSEBhavSource().fetch_universe()
+            log.info(
+                "Universe fetched from NSE Bhavcopy",
+                mode=mode,
+                symbol_count=len(symbols),
+            )
+        except Exception as exc:
+            log.warning(
+                f"Universe mode '{mode}': NSEBhavSource.fetch_universe() failed — "
+                "falling back to _NIFTY500_PLACEHOLDER (20 symbols). "
+                f"Error: {exc}",
+                mode=mode,
+            )
+            symbols = sorted(_NIFTY500_PLACEHOLDER)
 
     else:
         raise UniverseLoadError(
@@ -739,3 +760,62 @@ def _persist_to_watchlist(symbols: list[str], added_via: str = "file_upload") ->
             reason=str(exc),
             symbol_count=len(symbols),
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Symbol metadata generator
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_symbol_metadata(symbols: list[str], output_path: Path) -> None:
+    """Fetch sector/industry/mktcap metadata from yfinance and write to
+    data/metadata/symbol_info.csv. Called once during bootstrap."""
+    import pandas as pd
+    import yfinance as yf
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    rows: list[dict] = []
+    for symbol in symbols:
+        sector: str = ""
+        industry: str = ""
+        market_cap_cr: float = 0.0
+        name: str = ""
+        currency: str = ""
+        try:
+            ticker = yf.Ticker(symbol + ".NS")
+            info = ticker.info
+            sector = info.get("sector") or ""
+            industry = info.get("industry") or ""
+            raw_cap = info.get("marketCap") or 0
+            market_cap_cr = raw_cap / 1e7
+            name = info.get("longName") or ""
+            currency = info.get("currency") or ""
+            log.info("symbol_metadata", symbol=symbol, sector=sector)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(
+                "symbol_metadata fetch failed — using empty values",
+                symbol=symbol,
+                reason=str(exc),
+            )
+        rows.append(
+            {
+                "symbol": symbol,
+                "name": name,
+                "sector": sector,
+                "industry": industry,
+                "market_cap_cr": market_cap_cr,
+                "currency": currency,
+            }
+        )
+
+    df = pd.DataFrame(
+        rows,
+        columns=["symbol", "name", "sector", "industry", "market_cap_cr", "currency"],
+    )
+    df.to_csv(output_path, index=False)
+    log.info(
+        "Symbol metadata written",
+        path=str(output_path),
+        rows=len(df),
+    )

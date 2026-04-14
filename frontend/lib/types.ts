@@ -211,3 +211,53 @@ export interface StockHistoryPoint {
   score: number;
   setup_quality: SetupQuality;
 }
+
+// ─── Backtest types ────────────────────────────────────────────────────────
+
+export interface BacktestRunSummary {
+  run_id: string;
+  run_date: string;
+  status: string;
+  duration_sec: number;
+  a_plus_count: number;
+  a_count: number;
+}
+
+export interface BacktestReport {
+  run_id: string;
+  start_date: string;
+  end_date: string;
+  total_return_pct: number;
+  cagr_pct: number;
+  max_drawdown_pct: number;
+  sharpe_ratio: number;
+  win_rate: number;
+  total_trades: number;
+  regime_stats: {
+    regime: string;
+    trades: number;
+    win_rate: number;
+    avg_return: number;
+    total_return: number;
+  }[];
+}
+
+export interface EquityCurvePoint {
+  date: string;
+  portfolio_value: number;
+  benchmark_value: number;
+  regime: string;
+}
+
+export interface OHLCVPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  sma_50: number | null;
+  sma_200: number | null;
+  sma_21: number | null;
+  sma_150: number | null;
+}

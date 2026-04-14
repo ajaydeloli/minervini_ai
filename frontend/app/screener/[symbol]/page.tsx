@@ -45,6 +45,7 @@ import {
   fetchStockHistory,
   fetchWatchlist,
   addToWatchlist,
+  fetchOHLCV,
 } from "@/lib/api";
 import type { SEPAResult, StockHistoryPoint } from "@/lib/types";
 
