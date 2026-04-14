@@ -558,7 +558,24 @@ def main() -> None:
         log.info("Dry run complete — no downloads or DB writes performed")
         sys.exit(0)
 
-    # ── Step 8: Initialise DB and log run start ───────────────────────────────
+    # ── Step 8a: Load application config (needed by the data-source factory) ───
+    import yaml as _yaml
+
+    try:
+        with open(args.config_path, encoding="utf-8") as _fh:
+            app_config: dict = _yaml.safe_load(_fh) or {}
+    except (OSError, Exception) as _cfg_exc:
+        print(
+            f"ERROR: Could not load config from '{args.config_path}': {_cfg_exc}",
+            file=sys.stderr,
+        )
+        log.error("Config load failed", path=args.config_path, reason=str(_cfg_exc))
+        sys.exit(1)
+
+    _active_source = app_config.get("universe", {}).get("source", "yfinance")
+    log.info("Data source resolved from config", source=_active_source)
+
+    # ── Step 8b: Initialise DB and log run start ──────────────────────────────
     init_db(args.db_path)
 
     run_id: int = log_run(
@@ -593,6 +610,7 @@ def main() -> None:
                     output_dir,
                     args.force,
                     print_lock,
+                    app_config,      # pass resolved config so factory reads universe.source
                 ): (idx - 1)         # 0-based slot in results[]
                 for idx, symbol in enumerate(symbols_to_bootstrap, start=1)
             }
@@ -635,60 +653,50 @@ def main() -> None:
     # Runs only when OHLCV bootstrap succeeded for at least one symbol
     # and the --skip-features flag was NOT set.
     if not args.skip_features:
-        import yaml
         from features.feature_store import (
             bootstrap as bootstrap_features,
             needs_bootstrap,
         )
 
-        try:
-            with open(args.config_path, encoding="utf-8") as _fh:
-                _app_config: dict = yaml.safe_load(_fh) or {}
-        except (OSError, Exception) as _exc:
-            log.warning(
-                "Could not load settings.yaml — feature computation skipped",
-                path=args.config_path,
-                reason=str(_exc),
-            )
-            _app_config = {}
+        # Reuse app_config already loaded above — no second file read needed.
+        _app_config: dict = app_config
 
-        if _app_config:
-            feat_start = time.monotonic()
-            feat_success = 0
-            feat_skipped = 0
+        feat_start = time.monotonic()
+        feat_success = 0
+        feat_skipped = 0
 
-            for symbol in symbols_to_bootstrap:
-                if needs_bootstrap(symbol, _app_config):
-                    try:
-                        bootstrap_features(symbol, _app_config)
-                        feat_success += 1
-                        log.debug("Feature bootstrap done", symbol=symbol)
-                    except Exception as _exc:
-                        feat_skipped += 1
-                        log.warning(
-                            "Feature bootstrap failed — skipping",
-                            symbol=symbol,
-                            reason=str(_exc),
-                        )
-                else:
+        for symbol in symbols_to_bootstrap:
+            if needs_bootstrap(symbol, _app_config):
+                try:
+                    bootstrap_features(symbol, _app_config)
+                    feat_success += 1
+                    log.debug("Feature bootstrap done", symbol=symbol)
+                except Exception as _exc:
                     feat_skipped += 1
-                    log.debug(
-                        "Feature bootstrap skipped — already present",
+                    log.warning(
+                        "Feature bootstrap failed — skipping",
                         symbol=symbol,
+                        reason=str(_exc),
                     )
+            else:
+                feat_skipped += 1
+                log.debug(
+                    "Feature bootstrap skipped — already present",
+                    symbol=symbol,
+                )
 
-            feat_elapsed = time.monotonic() - feat_start
-            feat_msg = (
-                f"Feature bootstrap complete: {feat_success} symbols, "
-                f"{feat_skipped} skipped (insufficient data or already present)"
-            )
-            print(feat_msg)
-            log.info(
-                "Feature bootstrap complete",
-                n_success=feat_success,
-                n_skipped=feat_skipped,
-                duration_sec=round(feat_elapsed, 2),
-            )
+        feat_elapsed = time.monotonic() - feat_start
+        feat_msg = (
+            f"Feature bootstrap complete: {feat_success} symbols, "
+            f"{feat_skipped} skipped (insufficient data or already present)"
+        )
+        print(feat_msg)
+        log.info(
+            "Feature bootstrap complete",
+            n_success=feat_success,
+            n_skipped=feat_skipped,
+            duration_sec=round(feat_elapsed, 2),
+        )
     # --- END PHASE 2 ---
 
     # ── Symbol metadata (Gap 5 fix) ─────────────────────────────────────────

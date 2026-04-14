@@ -221,7 +221,7 @@ class TelegramAlert(BaseAlert):
 
         min_quality: str = tg_cfg.get("min_quality", "A")
         wl_min_score: int = (
-            config.get("watchlist", {}).get("min_score_alert", 55)
+            config.get("scoring", {}).get("min_score_alert", 70)
         )
         watchlist_syms = self._watchlist_symbols(config)
 

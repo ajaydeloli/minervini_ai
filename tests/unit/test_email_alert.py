@@ -35,12 +35,12 @@ _BASE_CONFIG = {
             "html": True,
         }
     },
-    "watchlist": {"min_score_alert": 55},
+    "scoring": {"min_score_alert": 55},
 }
 
 _DISABLED_CONFIG = {
     "alerts": {"email": {"enabled": False, "to": ["x@x.com"]}},
-    "watchlist": {"min_score_alert": 55},
+    "scoring": {"min_score_alert": 55},
 }
 
 
@@ -104,7 +104,7 @@ class TestEmailAlertDisabled(unittest.TestCase):
         """When 'to' list is empty send() skips without raising."""
         cfg = {
             "alerts": {"email": {"enabled": True, "to": []}},
-            "watchlist": {"min_score_alert": 55},
+            "scoring": {"min_score_alert": 55},
         }
         alert = EmailAlert(smtp_user="u", smtp_pass="p")
         result = alert.send([_make_result()], _RUN_DATE, cfg)
@@ -139,7 +139,8 @@ class TestEmailAlertFiltering(unittest.TestCase):
         cfg = {
             "alerts": {"email": {"enabled": True, "to": ["x@x.com"],
                                   "min_quality": "A", "html": False}},
-            "watchlist": {"min_score_alert": 55, "symbols": ["IRCTC"]},
+            "watchlist": {"symbols": ["IRCTC"]},
+            "scoring": {"min_score_alert": 55},
         }
         alert = EmailAlert(smtp_user="u", smtp_pass="p")
         results = [_make_result("IRCTC", "B", 60)]
@@ -153,7 +154,8 @@ class TestEmailAlertFiltering(unittest.TestCase):
         cfg = {
             "alerts": {"email": {"enabled": True, "to": ["x@x.com"],
                                   "min_quality": "A", "html": False}},
-            "watchlist": {"min_score_alert": 55, "symbols": ["IRCTC"]},
+            "watchlist": {"symbols": ["IRCTC"]},
+            "scoring": {"min_score_alert": 55},
         }
         alert = EmailAlert(smtp_user="u", smtp_pass="p")
         results = [_make_result("IRCTC", "B", 40)]

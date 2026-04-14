@@ -91,6 +91,26 @@ async def _lifespan(application: FastAPI):  # noqa: ARG001
     elif not admin_key:
         log.warning("API_ADMIN_KEY is not set. POST /api/v1/run is unprotected.")
 
+    # ── LLM API key check ──────────────────────────────────────────────────────
+    _LLM_KEY_MAP = {
+        "groq":       "GROQ_API_KEY",
+        "anthropic":  "ANTHROPIC_API_KEY",
+        "openai":     "OPENAI_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+        "gemini":     "GEMINI_API_KEY",
+    }
+    llm_cfg  = cfg.get("llm", {})
+    if llm_cfg.get("enabled", False):
+        _provider = llm_cfg.get("provider", "").lower()
+        _key_var  = _LLM_KEY_MAP.get(_provider)
+        if _key_var and not os.environ.get(_key_var, "").strip():
+            log.warning(
+                "LLM is enabled (provider=%s) but %s is not set. "
+                "AI trade briefs will be skipped. "
+                "Set %s in your .env file.",
+                _provider, _key_var, _key_var,
+            )
+
     # ── Database existence check ──────────────────────────────────────────────
     if not _db_existed:
         log.warning(

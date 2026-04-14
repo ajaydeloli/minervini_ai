@@ -35,14 +35,14 @@ _BASE_CONFIG = {
             "min_quality": "A",
         }
     },
-    "watchlist": {
+    "scoring": {
         "min_score_alert": 55,
     },
 }
 
 _DISABLED_CONFIG = {
     "alerts": {"telegram": {"enabled": False}},
-    "watchlist": {"min_score_alert": 55},
+    "scoring": {"min_score_alert": 55},
 }
 
 
@@ -176,9 +176,9 @@ class TestTelegramAlertWatchlist(unittest.TestCase):
         config = {
             "alerts": {"telegram": {"enabled": True, "min_quality": "A"}},
             "watchlist": {
-                "min_score_alert": 55,
                 "symbols": ["IRCTC"],
             },
+            "scoring": {"min_score_alert": 55},
         }
 
         alert = TelegramAlert(bot_token="tok", chat_id="cid")
@@ -215,9 +215,9 @@ class TestTelegramAlertWatchlist(unittest.TestCase):
         config = {
             "alerts": {"telegram": {"enabled": True, "min_quality": "A"}},
             "watchlist": {
-                "min_score_alert": 55,
                 "symbols": ["IRCTC"],
             },
+            "scoring": {"min_score_alert": 55},
         }
 
         alert = TelegramAlert(bot_token="tok", chat_id="cid")

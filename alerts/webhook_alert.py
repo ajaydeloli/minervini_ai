@@ -258,7 +258,7 @@ class WebhookAlert(BaseAlert):
         fmt: str          = wh_cfg.get("format", "slack")
         min_quality: str  = wh_cfg.get("min_quality", "A")
         timeout: int      = int(wh_cfg.get("timeout_sec", self._timeout_sec))
-        wl_min_score: int = config.get("watchlist", {}).get("min_score_alert", 55)
+        wl_min_score: int = config.get("scoring", {}).get("min_score_alert", 70)
         watchlist_syms    = self._watchlist_symbols(config)
 
         # ── coerce & filter ───────────────────────────────────────────────────

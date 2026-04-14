@@ -345,7 +345,7 @@ class EmailAlert(BaseAlert):
         subject_prefix    = email_cfg.get("subject_prefix", "Minervini Screener")
         min_quality: str  = email_cfg.get("min_quality", "A")
         include_html: bool = email_cfg.get("html", True)
-        wl_min_score: int  = config.get("watchlist", {}).get("min_score_alert", 55)
+        wl_min_score: int  = config.get("scoring", {}).get("min_score_alert", 70)
         watchlist_syms     = self._watchlist_symbols(config)
 
         # ── coerce & filter ───────────────────────────────────────────────────

@@ -16,7 +16,7 @@ watchlist:
   always_scan: true
   priority_in_reports: true
   always_generate_charts: true
-  min_score_alert: 55
+  # min_score_alert moved to scoring.min_score_alert (was duplicate)
 
 stage:
   ma200_slope_lookback: 20
@@ -50,7 +50,7 @@ fundamentals:
     min_sales_growth_yoy: 10.0
 
 news:
-  enabled: false                  # enable after getting newsdata.io key
+  enabled: true
   cache_minutes: 30
   llm_rescore: false
 

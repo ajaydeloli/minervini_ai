@@ -36,12 +36,12 @@ _BASE_CONFIG = {
             "min_quality": "A",
         }
     },
-    "watchlist": {"min_score_alert": 55},
+    "scoring": {"min_score_alert": 55},
 }
 
 _DISABLED_CONFIG = {
     "alerts": {"webhook": {"enabled": False, "url": ["https://x.example.com"]}},
-    "watchlist": {"min_score_alert": 55},
+    "scoring": {"min_score_alert": 55},
 }
 
 
@@ -104,7 +104,7 @@ class TestWebhookAlertDisabled(unittest.TestCase):
         """When no URLs configured, send() skips without raising."""
         cfg = {
             "alerts": {"webhook": {"enabled": True, "url": []}},
-            "watchlist": {"min_score_alert": 55},
+            "scoring": {"min_score_alert": 55},
         }
         alert = WebhookAlert()
         ar = alert.send([_make_result()], _RUN_DATE, cfg)
@@ -150,7 +150,7 @@ class TestWebhookAlertSuccess(unittest.TestCase):
                     "min_quality": "A",
                 }
             },
-            "watchlist": {"min_score_alert": 55},
+            "scoring": {"min_score_alert": 55},
         }
         alert = WebhookAlert()
         results = [_make_result("DIXON", "A+", 91)]
@@ -187,7 +187,7 @@ class TestWebhookAlertPartialFailure(unittest.TestCase):
                     "min_quality": "A",
                 }
             },
-            "watchlist": {"min_score_alert": 55},
+            "scoring": {"min_score_alert": 55},
         }
         alert = WebhookAlert()
         results = [_make_result("DIXON", "A+", 91)]
@@ -235,7 +235,8 @@ class TestWebhookAlertFiltering(unittest.TestCase):
                 "enabled": True, "url": ["https://x.example.com"],
                 "format": "slack", "min_quality": "A",
             }},
-            "watchlist": {"min_score_alert": 55, "symbols": ["IRCTC"]},
+            "watchlist": {"symbols": ["IRCTC"]},
+            "scoring": {"min_score_alert": 55},
         }
         alert = WebhookAlert()
         results = [_make_result("IRCTC", "B", 60)]
@@ -296,7 +297,7 @@ class TestWebhookPayloadBuilders(unittest.TestCase):
                 "enabled": True, "url": ["https://x.example.com"],
                 "format": "plain", "min_quality": "A",
             }},
-            "watchlist": {"min_score_alert": 55},
+            "scoring": {"min_score_alert": 55},
         }
         alert = WebhookAlert()
         results = [_make_result("DIXON", "A+", 91)]
@@ -325,7 +326,7 @@ class TestWebhookUrlDedup(unittest.TestCase):
                 "enabled": True, "url": [url],
                 "format": "slack", "min_quality": "A",
             }},
-            "watchlist": {"min_score_alert": 55},
+            "scoring": {"min_score_alert": 55},
         }
         alert = WebhookAlert(urls=[url])   # same URL injected via constructor
         results = [_make_result("DIXON", "A+", 91)]
