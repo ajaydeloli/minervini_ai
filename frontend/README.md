@@ -94,6 +94,17 @@ gate entirely — the middleware becomes a no-op.
 
 ## Vercel Deployment
 
+**Required environment variables (set in Vercel → Settings → Environment Variables):**
+
+| Variable | Value | Required |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | Your backend API URL, e.g. `https://your-server.com` | ✅ Yes |
+| `NEXT_PUBLIC_REQUIRE_AUTH` | `true` to enable the password gate | Optional |
+| `SITE_PASSWORD` | Password for the login gate | Only if `REQUIRE_AUTH=true` |
+
+> ⚠️ If `NEXT_PUBLIC_API_URL` is not set, all screener tables and charts will
+> show empty data in production. This is the most common deployment mistake.
+
 ### Step 1 — Install and authenticate the Vercel CLI
 
 ```bash

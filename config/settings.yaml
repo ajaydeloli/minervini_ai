@@ -61,12 +61,6 @@ news:
 scoring:
   weights:
     # Must sum to 1.0. Adjust to shift emphasis between signals.
-    # rs_rating: most predictive of forward returns
-    # trend: Minervini 8-condition filter (hard gate at Stage 2)
-    # vcp: pattern quality — tighter base = better risk/reward
-    # volume: breakout confirmation + accumulation signal
-    # fundamental: EPS/ROE/sales (soft gate by default)
-    # news: sentiment overlay (smallest weight — most noisy)
     rs_rating: 0.30
     trend: 0.25
     vcp: 0.25
@@ -94,6 +88,7 @@ backtest:
   target_pct: 0.10
   max_hold_days: 20
   position_size_pct: 0.10
+  weekend_auto_run: false         # set to true to enable automatic Saturday backtests
 
 llm:
   enabled: true                  # enable after getting API key

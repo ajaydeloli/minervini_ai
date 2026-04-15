@@ -20,11 +20,12 @@
 9. [Testing](#9-testing)
 10. [Linting & Formatting](#10-linting--formatting)
 11. [Makefile Shortcuts](#11-makefile-shortcuts)
-12. [SQLite — Quick Queries](#12-sqlite--quick-queries)
-13. [Log Inspection](#13-log-inspection)
-14. [Systemd Services — Start / Stop / Status](#14-systemd-services--start--stop--status)
-15. [Git Workflow](#15-git-workflow)
-16. [Environment & Secrets](#16-environment--secrets)
+12. [Feature Pipeline Benchmark](#12-feature-pipeline-benchmark)
+13. [SQLite — Quick Queries](#13-sqlite--quick-queries)
+14. [Log Inspection](#14-log-inspection)
+15. [Systemd Services — Start / Stop / Status](#15-systemd-services--start--stop--status)
+16. [Git Workflow](#16-git-workflow)
+17. [Environment & Secrets](#17-environment--secrets)
 
 ---
 
@@ -557,12 +558,67 @@ make rebuild          # python scripts/rebuild_features.py --universe nifty500
 make paper-reset      # reset paper trading portfolio (with confirmation)
 make api              # start FastAPI dev server on port 8000
 make dashboard        # start Streamlit dashboard on port 8501
+make benchmark        # run feature pipeline benchmark (synthetic, no internet)
+make benchmark ARGS="--live"   # live benchmark against real NSE data (~5 min)
 make backtest START=YYYY-MM-DD END=YYYY-MM-DD   # run backtester over date range
 ```
 
 ---
 
-## 12. SQLite — Quick Queries
+## 12. Feature Pipeline Benchmark
+
+Benchmarks the Phase 2 feature pipeline (`bootstrap()` and `update()`) and
+prints a pass/fail table against the targets in `PROJECT_DESIGN.md §5.1`:
+
+- **bootstrap:** < 15 min total for 500 symbols (= 1 800 ms/symbol)
+- **update:** < 50 ms per symbol
+
+Results are written to `data/benchmarks/feature_pipeline_<date>.json` for
+trend tracking.  The output directory is created automatically — safe to run
+on a fresh clone with no data on disk.
+
+### Synthetic mode (default — fast, no internet needed)
+
+```bash
+# Run benchmark with 10 synthetic OHLCV symbols (default)
+python scripts/benchmark_features.py
+
+# Override the symbol count
+python scripts/benchmark_features.py --symbols 20
+
+# Reuse previously-written Parquet files (skips OHLCV regeneration)
+python scripts/benchmark_features.py --use-cache
+```
+
+### Live mode — real NSE data (~5 min, internet required)
+
+```bash
+# Run live benchmark against real NSE data (requires internet, ~5 min)
+python scripts/benchmark_features.py --live
+
+# Use only the first N symbols from the hardcoded NSE list
+python scripts/benchmark_features.py --live --symbols 10
+```
+
+In live mode the script:
+
+- Downloads OHLCV for up to 20 hardcoded NSE blue-chip symbols via `YFinanceSource`.
+- Prints an extrapolated 500-symbol update time: `Estimated 500-symbol update: Xs`.
+- Saves results to `data/benchmarks/feature_pipeline_<date>_live.json`.
+- **Exits with code 1** if any symbol exceeds 100 ms update time (2× the
+  synthetic target, to account for network variance).
+
+### Makefile shortcuts
+
+```bash
+make benchmark                     # synthetic mode (fast, no internet)
+make benchmark ARGS="--live"       # live NSE mode (~5 min, internet required)
+make benchmark ARGS="--symbols 5"  # synthetic with only 5 symbols
+```
+
+---
+
+## 13. SQLite — Quick Queries
 
 The default database is at `data/minervini.db`. Pass the path to `sqlite3`.
 
@@ -646,7 +702,7 @@ sqlite3 -column -header data/minervini.db \
 
 ---
 
-## 13. Log Inspection
+## 14. Log Inspection
 
 Application logs are written to `logs/minervini.log`. Console output goes to
 stderr and is visible directly in the terminal.

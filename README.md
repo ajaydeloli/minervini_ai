@@ -884,3 +884,64 @@ journalctl -u minervini-daily.service --since today
 ---
 
 *Built on Mark Minervini's SEPA methodology — "Trade Like a Stock Market Wizard" (2013)*
+
+
+---
+
+## Docker Deployment
+
+> The Next.js frontend is deployed separately to **Vercel** and is not Dockerized.
+> These containers cover: FastAPI backend · Streamlit dashboard · daily scheduler.
+
+```bash
+# 1. Copy and fill in your secrets
+cp .env.example .env
+nano .env
+
+# 2. Build the image (first time or after dependency changes)
+docker-compose build
+
+# 3. Start all services in the background
+docker-compose up -d
+
+# 4. Bootstrap data (first run only)
+docker-compose exec api python scripts/bootstrap.py
+
+# 5. View logs
+docker-compose logs -f api
+docker-compose logs -f scheduler
+```
+
+### Services
+
+| Service     | URL                       | Notes                                  |
+|-------------|---------------------------|----------------------------------------|
+| API         | http://localhost:8000     | FastAPI — 2 uvicorn workers            |
+| Dashboard   | http://localhost:8501     | Streamlit (headless)                   |
+| Scheduler   | _(no port)_               | Runs daily at 15:35 IST automatically  |
+
+### Volume & Secrets
+
+- **`./data`** is bind-mounted to `/app/data` inside every container and also
+  backed by the named volume `minervini_data` for cloud portability.
+  SQLite and Parquet files are **never** baked into the image.
+- **`.env`** is injected at runtime via `env_file` — it is excluded from both
+  `.gitignore` and `.dockerignore` and is **never** embedded in the image.
+
+### Useful Commands
+
+```bash
+# Restart a single service
+docker-compose restart api
+
+# One-off command inside the api container
+docker-compose exec api python -c "from api.main import app; print('OK')"
+
+# Stop everything (data volume is preserved)
+docker-compose down
+
+# Destroy everything including the data volume (destructive!)
+docker-compose down -v
+```
+
+*Built on Mark Minervini's SEPA methodology — "Trade Like a Stock Market Wizard" (2013)*

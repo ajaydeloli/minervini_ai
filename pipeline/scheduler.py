@@ -1,11 +1,12 @@
 """
 pipeline/scheduler.py
 ─────────────────────
-APScheduler-based daily pipeline scheduler for the Minervini AI system.
+APScheduler-based scheduler for the Minervini AI system.
 
-Fires the full screening pipeline on every NSE trading day (Mon–Fri) at
-market close (default 15:35 IST), then keeps running so the next day is
-covered automatically.
+Fires three recurring jobs:
+  • Daily pipeline     – every Mon–Fri at market close (default 15:35 IST)
+  • Monthly bootstrap  – 1st of each month at 02:00 IST (re-seeds universe)
+  • Weekend backtest   – every Saturday at 03:00 IST (opt-in via config)
 
 Public API
 ──────────
@@ -45,7 +46,8 @@ manually:
     2.  Run:  python -c "import yaml; from pipeline.scheduler import \\
               start_scheduler; start_scheduler(yaml.safe_load(\\
               open('config/settings.yaml')), 'data/minervini.db')"
-    3.  Confirm "Scheduler started, next run: ..." appears in the log.
+    3.  Confirm "Scheduler started" appears in the log with all three
+        next-run times.
     4.  Wait for the trigger; verify "Daily job complete" appears.
     5.  Press Ctrl-C; confirm "Scheduler shut down cleanly" appears.
 
@@ -59,7 +61,9 @@ Dependencies
 from __future__ import annotations
 
 import signal
+import subprocess
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -146,6 +150,108 @@ def _daily_job(config: dict, db_path: str | Path) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Monthly bootstrap job (called by APScheduler — must never raise)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _monthly_bootstrap_job(config: dict, db_path: str | Path) -> None:
+    """
+    Re-seeds the full universe on the 1st of every month at 02:00 IST.
+
+    Delegates to scripts/bootstrap.py via a subprocess so that the
+    long-running import does not block the scheduler thread.  A 2-hour
+    timeout prevents it from hanging indefinitely.
+
+    Swallows ALL exceptions so the scheduler keeps running even if the
+    bootstrap fails.
+    """
+    log.info("Monthly bootstrap triggered")
+    try:
+        result = subprocess.run(
+            [sys.executable, "scripts/bootstrap.py", "--universe", "all"],
+            check=False,
+            timeout=7200,  # 2-hour timeout
+        )
+        if result.returncode == 0:
+            log.info("Monthly bootstrap complete", returncode=result.returncode)
+        else:
+            log.error(
+                "Monthly bootstrap failed",
+                returncode=result.returncode,
+            )
+    except subprocess.TimeoutExpired:
+        log.error("Monthly bootstrap failed — subprocess timed out after 2 hours")
+    except Exception as exc:  # noqa: BLE001
+        log.critical(
+            "Monthly bootstrap raised an unhandled exception",
+            reason=str(exc),
+            exc_info=True,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Weekend backtest job (called by APScheduler — must never raise)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _weekend_backtest_job(config: dict, db_path: str | Path) -> None:
+    """
+    Runs a rolling 2-year backtest every Saturday at 03:00 IST.
+
+    Opt-in only: fires only when config['backtest']['weekend_auto_run']
+    is explicitly set to True.  Disabled by default so new deployments
+    are not surprised by a 3-hour Saturday job.
+
+    Delegates to scripts/backtest_runner.py via subprocess with a 3-hour
+    timeout.  Swallows ALL exceptions so the scheduler keeps running.
+    """
+    if not config.get("backtest", {}).get("weekend_auto_run", False):
+        log.debug("Weekend backtest skipped — weekend_auto_run is disabled in config")
+        return
+
+    today = date.today()
+    end_date_str = today.isoformat()
+    start_date_str = (today - timedelta(days=730)).isoformat()  # ~2 years
+
+    log.info(
+        "Weekend backtest triggered",
+        start=start_date_str,
+        end=end_date_str,
+    )
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/backtest_runner.py",
+                "--start", start_date_str,
+                "--end", end_date_str,
+            ],
+            check=False,
+            timeout=10800,  # 3-hour timeout
+        )
+        if result.returncode == 0:
+            log.info(
+                "Weekend backtest complete",
+                returncode=result.returncode,
+                start=start_date_str,
+                end=end_date_str,
+            )
+        else:
+            log.error(
+                "Weekend backtest failed",
+                returncode=result.returncode,
+                start=start_date_str,
+                end=end_date_str,
+            )
+    except subprocess.TimeoutExpired:
+        log.error("Weekend backtest failed — subprocess timed out after 3 hours")
+    except Exception as exc:  # noqa: BLE001
+        log.critical(
+            "Weekend backtest raised an unhandled exception",
+            reason=str(exc),
+            exc_info=True,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -157,10 +263,10 @@ def start_scheduler(
     """
     Start the APScheduler cron scheduler and optionally block until shutdown.
 
-    The scheduler fires _daily_job() every Monday–Friday at the time
-    specified by config['scheduler']['run_time'] (default "15:35") in the
-    timezone specified by config['scheduler']['timezone']
-    (default "Asia/Kolkata").
+    Registers three jobs:
+      • daily_pipeline    – Mon–Fri at config['scheduler']['run_time'] IST
+      • monthly_bootstrap – 1st of each month at 02:00 IST
+      • weekend_backtest  – Every Saturday at 03:00 IST (opt-in)
 
     Args:
         config:   Full application config dict (loaded from settings.yaml).
@@ -201,16 +307,10 @@ def start_scheduler(
     # ── Build scheduler ───────────────────────────────────────────────────────
     scheduler = BackgroundScheduler(timezone=tz)
 
-    trigger = CronTrigger(
-        day_of_week="mon-fri",
-        hour=hour,
-        minute=minute,
-        timezone=tz,
-    )
-
+    # -- Job 1: Daily pipeline (Mon–Fri at configured run_time) ---------------
     scheduler.add_job(
         func=_daily_job,
-        trigger=trigger,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=hour, minute=minute, timezone=tz),
         args=[config, db_path],
         id="daily_pipeline",
         name="Minervini daily pipeline",
@@ -219,14 +319,44 @@ def start_scheduler(
         misfire_grace_time=300, # fire up to 5 min late if the process was busy
     )
 
+    # -- Job 2: Monthly bootstrap (1st of each month at 02:00) ----------------
+    scheduler.add_job(
+        func=_monthly_bootstrap_job,
+        trigger=CronTrigger(day=1, hour=2, minute=0, timezone=tz),
+        args=[config, db_path],
+        id="monthly_bootstrap",
+        name="Minervini monthly bootstrap",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+
+    # -- Job 3: Weekend backtest (every Saturday at 03:00, opt-in) ------------
+    scheduler.add_job(
+        func=_weekend_backtest_job,
+        trigger=CronTrigger(day_of_week="sat", hour=3, minute=0, timezone=tz),
+        args=[config, db_path],
+        id="weekend_backtest",
+        name="Minervini weekend backtest",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+
     scheduler.start()
 
-    # Determine next run time for the log message
-    job = scheduler.get_job("daily_pipeline")
-    next_run = job.next_run_time if job else "unknown"
+    # ── Determine next run times for the startup log ──────────────────────────
+    def _next(job_id: str) -> str:
+        job = scheduler.get_job(job_id)
+        return str(job.next_run_time) if job else "unknown"
+
+    weekend_auto_run: bool = config.get("backtest", {}).get("weekend_auto_run", False)
     log.info(
-        "Scheduler started, next run: %s",
-        next_run,
+        "Scheduler started — three jobs registered",
+        daily_pipeline_next=_next("daily_pipeline"),
+        monthly_bootstrap_next=_next("monthly_bootstrap"),
+        weekend_backtest_next=_next("weekend_backtest"),
+        weekend_backtest_enabled=weekend_auto_run,
         run_time=run_time_str,
         timezone=tz_name,
     )
@@ -253,6 +383,7 @@ def start_scheduler(
         import time as _time
         while True:
             _time.sleep(60)
+
 
 
 def run_now(

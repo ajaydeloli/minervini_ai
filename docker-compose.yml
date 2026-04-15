@@ -1,0 +1,64 @@
+# docker-compose.yml — Minervini AI services
+# Usage: docker-compose up -d
+# Secrets:  cp .env.example .env && nano .env   (never committed to git)
+# Data:     ./data is bind-mounted AND backed by a named volume for portability
+
+version: "3.9"
+
+# ── Named volume for persistent SQLite + Parquet data ─────────────────────────
+volumes:
+  minervini_data:
+
+# ── Shared build context (built once, reused by all services) ─────────────────
+x-base: &base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env                        # secrets injected at runtime, not baked in
+  volumes:
+    - ./data:/app/data                  # bind-mount for easy host access
+    - minervini_data:/app/data          # named volume for cloud / portability
+  restart: unless-stopped
+
+
+services:
+
+  # ── FastAPI backend ──────────────────────────────────────────────────────────
+  api:
+    <<: *base
+    container_name: minervini_api
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    # Default CMD from Dockerfile: uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  # ── Streamlit dashboard ──────────────────────────────────────────────────────
+  dashboard:
+    <<: *base
+    container_name: minervini_dashboard
+    ports:
+      - "8501:8501"
+    command: >
+      streamlit run dashboard/app.py
+        --server.port 8501
+        --server.headless true
+        --server.address 0.0.0.0
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ── Daily scheduler (APScheduler / cron wrapper) ─────────────────────────────
+  scheduler:
+    <<: *base
+    container_name: minervini_scheduler
+    command: python scripts/run_daily.py
+    depends_on:
+      api:
+        condition: service_healthy
+    # No ports needed — scheduler talks to the API internally
+    # Runs the daily pipeline at 15:35 IST (configured inside run_daily.py)

@@ -17,6 +17,13 @@ import NavBar from "@/components/NavBar";
 import MobileTabBar from "@/components/MobileTabBar";
 import MarketStatusBar from "@/components/MarketStatusBar";
 
+if (process.env.NODE_ENV !== "development" && !process.env.NEXT_PUBLIC_API_URL) {
+  console.warn(
+    "NEXT_PUBLIC_API_URL is not set. Charts and screener data will not load. " +
+    "See frontend/README.md for deployment instructions."
+  );
+}
+
 /* ── Fonts ────────────────────────────────────────────────────────────────── */
 const inter = Inter({
   subsets: ["latin"],

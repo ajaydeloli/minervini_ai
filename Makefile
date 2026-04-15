@@ -6,7 +6,8 @@ PYTHON = $(VENV)/bin/python
 PIP    = $(VENV)/bin/pip
 
 .PHONY: install test test-fast lint format format-check \
-        daily backtest rebuild paper-reset api dashboard clean help
+        daily backtest rebuild paper-reset paper-start paper-status \
+        api dashboard benchmark clean help
 
 # ── Default target ────────────────────────────────────────────────────────────
 .DEFAULT_GOAL := help
@@ -58,9 +59,40 @@ rebuild:
 	$(PYTHON) scripts/rebuild_features.py --universe nifty500
 
 # ── paper-reset ───────────────────────────────────────────────────────────────
-# Reset the paper-trading portfolio to a clean state.
+# Reset the paper-trading portfolio to a clean state (reads initial_capital from config).
 paper-reset:
-	$(PYTHON) -c "from paper_trading.simulator import reset_portfolio; reset_portfolio(confirm=True)"
+	$(PYTHON) -c "\
+import yaml; from pathlib import Path; \
+from paper_trading.portfolio import reset_portfolio; \
+cfg = yaml.safe_load(open('config/settings.yaml')); \
+reset_portfolio(Path('data/minervini.db'), cfg['paper_trading']['initial_capital']); \
+print('Paper trading portfolio reset.')"
+
+# ── paper-start ───────────────────────────────────────────────────────────────
+# Enable paper trading by flipping paper_trading.enabled to true in settings.yaml.
+paper-start:
+	@echo "Enabling paper trading in config/settings.yaml..."
+	$(PYTHON) -c "\
+import re, pathlib; \
+path = pathlib.Path('config/settings.yaml'); \
+content = path.read_text(); \
+content = re.sub(r'(paper_trading:.*?enabled:)\s*false', r'\1 true', \
+    content, flags=re.DOTALL, count=1); \
+path.write_text(content); \
+print('paper_trading.enabled set to true.'); \
+print('Run: make daily  to start paper trading on next screen run.')"
+
+# ── paper-status ──────────────────────────────────────────────────────────────
+# Print a summary of the current paper-trading portfolio.
+paper-status:
+	$(PYTHON) -c "\
+from pathlib import Path; \
+from paper_trading.report import get_portfolio_summary, format_summary_text; \
+try: \
+    summary = get_portfolio_summary(Path('data/minervini.db'), {}); \
+    print(format_summary_text(summary)); \
+except Exception as e: \
+    print(f'Paper trading not yet initialised or no trades: {e}')"
 
 # ── api ───────────────────────────────────────────────────────────────────────
 # Start the FastAPI server with hot-reload on port 8000.
@@ -71,6 +103,12 @@ api:
 # Launch the Streamlit dashboard on port 8501.
 dashboard:
 	$(PYTHON) -m streamlit run dashboard/app.py --server.port 8501
+
+# ── benchmark ─────────────────────────────────────────────────────────────────
+# Run the feature pipeline performance benchmark (synthetic mode by default).
+# Use `make benchmark ARGS="--live"` to run against real NSE data (~5 min).
+benchmark:
+	$(PYTHON) scripts/benchmark_features.py $(ARGS)
 
 # ── clean ─────────────────────────────────────────────────────────────────────
 # Remove all build artefacts, caches, and coverage data.
@@ -95,9 +133,12 @@ help:
 	@echo "  daily         Run daily pipeline for today"
 	@echo "  backtest      Backtest (make backtest START=YYYY-MM-DD END=YYYY-MM-DD)"
 	@echo "  rebuild       Rebuild feature store for Nifty 500 universe"
-	@echo "  paper-reset   Reset paper-trading portfolio"
+	@echo "  paper-reset   Reset paper-trading portfolio (reads initial_capital from config)"
+	@echo "  paper-start   Enable paper trading in config/settings.yaml"
+	@echo "  paper-status  Print current paper-trading portfolio summary"
 	@echo "  api           Start FastAPI server on :8000 (--reload)"
 	@echo "  dashboard     Launch Streamlit dashboard on :8501"
+	@echo "  benchmark     Run feature pipeline performance benchmark"
 	@echo "  clean         Remove __pycache__, .pytest_cache, .coverage, htmlcov/"
 	@echo "  help          Show this help message"
 	@echo ""

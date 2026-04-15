@@ -12,10 +12,14 @@ targets specified in PROJECT_DESIGN.md §5.1:
     update:     < 50 ms per symbol
 
 Usage (from the project root):
+    # Synthetic mode — fast, no internet required (default):
     python scripts/benchmark_features.py
+    python scripts/benchmark_features.py --use-cache    # reuse cached OHLCV
+    python scripts/benchmark_features.py --symbols 20   # override symbol count
 
-    # Use cached OHLCV if a prior run already wrote it:
-    python scripts/benchmark_features.py --use-cache
+    # Live mode — downloads real NSE data (~5 min, internet required):
+    python scripts/benchmark_features.py --live
+    python scripts/benchmark_features.py --live --symbols 10  # subset of live symbols
 
 Output:
     A plain-text table written to stdout.  Structured JSON is also written to
@@ -104,6 +108,11 @@ _FETCH_BENCHMARK = "features.feature_store.fetch_benchmark"
 def _make_ohlcv(n_rows: int, seed_price: float = 1_000.0, start: date | None = None) -> pd.DataFrame:
     """
     Build a deterministic OHLCV DataFrame.
+
+    # SYNTHETIC DATA CONFIRMED: all OHLCV values are generated internally using
+    # deterministic sine-based arithmetic (math.sin) with a fixed price seed.
+    # No disk reads, no network calls, no numpy.random — fully reproducible and
+    # safe to run on a fresh clone with zero data on disk.
 
     Parameters
     ──────────
@@ -261,6 +270,80 @@ def run_update_benchmarks(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Live benchmark helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Hardcoded NSE blue-chip / liquid symbols for --live mode.
+_LIVE_SYMBOLS: list[str] = [
+    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK",
+    "SBIN", "BAJFINANCE", "WIPRO", "MARUTI", "SUNPHARMA",
+    "AXISBANK", "DIXON", "TATAELXSI", "CDSL", "DMART",
+    "TITAN", "ASIANPAINT", "NESTLEIND", "LTIM", "KOTAKBANK",
+]
+
+# Per-symbol update time that triggers a non-zero exit in live mode.
+# Set to 2× the synthetic target to account for network / I/O variance.
+TARGET_LIVE_UPDATE_MS: float = 100.0
+
+
+def run_live_benchmarks(
+    symbols: list[str],
+    bench_dir: Path,
+) -> tuple[dict[str, float], dict[str, float], dict[str, pd.DataFrame]]:
+    """
+    Download real OHLCV data via YFinanceSource, then run bootstrap + update
+    timing against it.
+
+    Returns
+    ───────
+    (bootstrap_ms, update_ms, ohlcv_map)  — same shape as the synthetic path.
+    Symbols that fail to download are skipped with a warning.
+    """
+    from datetime import timedelta
+    from ingestion.yfinance_source import YFinanceSource
+    from utils.exceptions import DataFetchError
+
+    src = YFinanceSource()
+    end_date   = date.today()
+    # ~2 years gives well over 300 trading rows for any NSE symbol.
+    start_date = end_date - timedelta(days=730)
+
+    config = _make_config(bench_dir)
+    processed_dir = Path(config["data"]["processed_dir"])
+
+    ohlcv_map: dict[str, pd.DataFrame] = {}
+    print(f"\nDownloading live OHLCV data for {len(symbols)} NSE symbols...")
+    for sym in symbols:
+        try:
+            df = src.fetch(sym, start=start_date, end=end_date)
+            if df.empty:
+                print(f"  SKIP  {sym:<20}  (empty response)")
+                continue
+            # Persist to the benchmark processed dir so bootstrap() can read it.
+            processed_path = processed_dir / f"{sym}.parquet"
+            import storage.parquet_store as parquet_store
+            parquet_store.write(df, processed_path, overwrite=True)
+            print(f"  fetched  {sym:<20}  ({len(df)} rows)")
+            ohlcv_map[sym] = df
+        except DataFetchError as exc:
+            print(f"  SKIP  {sym:<20}  (fetch error: {exc})")
+
+    if not ohlcv_map:
+        print("  ERROR: no live data could be fetched — check internet connection.")
+        return {}, {}, {}
+
+    live_symbols = list(ohlcv_map.keys())
+
+    print(f"\nPhase 1 — bootstrap() ({len(live_symbols)} live symbols):")
+    bootstrap_results = run_bootstrap_benchmarks(live_symbols, ohlcv_map, config)
+
+    print(f"\nPhase 2 — update() ({len(live_symbols)} live symbols):")
+    update_results = run_update_benchmarks(live_symbols, ohlcv_map, config)
+
+    return bootstrap_results, update_results, ohlcv_map
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Output formatting
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -357,7 +440,16 @@ def save_json(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Benchmark the Phase 2 feature pipeline (bootstrap + update)."
+        description=(
+            "Benchmark the Phase 2 feature pipeline (bootstrap + update).\n\n"
+            "Modes:\n"
+            "  Synthetic (default) — uses internally-generated OHLCV data.\n"
+            "                        Fast, reproducible, no internet required.\n"
+            "  Live (--live)        — downloads real NSE data via YFinanceSource.\n"
+            "                        ~5 min; requires internet.  Exit code 1 if\n"
+            "                        any symbol exceeds the 100 ms update target."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--use-cache",
@@ -365,7 +457,29 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Reuse previously-written processed Parquet files instead of "
             "regenerating OHLCV from scratch.  Useful when rerunning to "
-            "profile only the update() path."
+            "profile only the update() path.  Ignored in --live mode."
+        ),
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        default=False,
+        help=(
+            "Download real OHLCV data from NSE via YFinanceSource and benchmark "
+            "against it.  Uses a hardcoded list of 20 liquid NSE symbols by "
+            "default (override with --symbols N).  Internet required (~5 min).  "
+            "Exit code 1 if ANY symbol exceeds 100 ms update time."
+        ),
+    )
+    parser.add_argument(
+        "--symbols",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Number of symbols to benchmark.  Defaults to 10 for synthetic mode "
+            "and 20 for --live mode.  In live mode, the first N symbols from the "
+            "hardcoded NSE list are used."
         ),
     )
     parser.add_argument(
@@ -382,16 +496,72 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Ensure the benchmarks output directory always exists (fresh-clone safety).
+    Path(PROJECT_ROOT / "data" / "benchmarks").mkdir(parents=True, exist_ok=True)
+
+    # Resolve symbol count: explicit --symbols beats mode defaults.
+    if args.symbols is not None:
+        num_symbols = args.symbols
+    elif args.live:
+        num_symbols = len(_LIVE_SYMBOLS)   # 20 by default
+    else:
+        num_symbols = NUM_SYMBOLS          # 10 by default
+
     bench_dir: Path = args.bench_dir
+
+    # ---- LIVE MODE ----------------------------------------------------------
+    if args.live:
+        live_symbols = _LIVE_SYMBOLS[:num_symbols]
+        print(f"\n{'='*70}")
+        print(f"  LIVE BENCHMARK — {len(live_symbols)} real NSE symbols")
+        print(f"{'='*70}")
+
+        bootstrap_results, update_results, ohlcv_map = run_live_benchmarks(
+            live_symbols, bench_dir
+        )
+        if not ohlcv_map:
+            return 1
+
+        fetched_symbols = list(ohlcv_map.keys())
+        print_table(fetched_symbols, bootstrap_results, update_results, ohlcv_map)
+
+        # Extrapolation note for live mode.
+        all_upd_live = [v for v in update_results.values() if not math.isnan(v)]
+        if all_upd_live:
+            avg_upd_live = sum(all_upd_live) / len(all_upd_live)
+            print(f"  Estimated 500-symbol update: {avg_upd_live * 500 / 1000:.1f}s")
+            print()
+
+        live_json_path = (
+            PROJECT_ROOT / "data" / "benchmarks"
+            / f"feature_pipeline_{date.today().isoformat()}_live.json"
+        )
+        # out_path.parent.mkdir is called inside save_json (already present).
+        save_json(fetched_symbols, bootstrap_results, update_results, ohlcv_map, live_json_path)
+
+        # Exit code 1 if ANY symbol exceeded the live update threshold.
+        live_failures = [
+            sym for sym, ms in update_results.items()
+            if ms >= TARGET_LIVE_UPDATE_MS
+        ]
+        if live_failures:
+            print(f"\n  ✗  {len(live_failures)} symbol(s) exceeded the live update target "
+                  f"({TARGET_LIVE_UPDATE_MS} ms): {live_failures}")
+            return 1
+        print(f"  ✓  All {len(fetched_symbols)} live symbols passed the update target "
+              f"(< {TARGET_LIVE_UPDATE_MS} ms)\n")
+        return 0
+
+    # ---- SYNTHETIC MODE (default) -------------------------------------------
     config = _make_config(bench_dir)
     processed_dir = Path(config["data"]["processed_dir"])
 
-    # ── Build symbol list ────────────────────────────────────────────────────
-    symbols = [f"{SYMBOL_PREFIX}{i:03d}" for i in range(NUM_SYMBOLS)]
+    # Build symbol list
+    symbols = [f"{SYMBOL_PREFIX}{i:03d}" for i in range(num_symbols)]
 
-    # ── Generate (or load cached) OHLCV DataFrames ──────────────────────────
+    # Generate (or load cached) OHLCV DataFrames
     ohlcv_map: dict[str, pd.DataFrame] = {}
-    print(f"\nPreparing OHLCV data ({NUM_SYMBOLS} symbols × {OHLCV_ROWS} rows)...")
+    print(f"\nPreparing OHLCV data ({num_symbols} symbols × {OHLCV_ROWS} rows)...")
     for i, sym in enumerate(symbols):
         processed_path = processed_dir / f"{sym}.parquet"
         # Vary the seed price per symbol to make datasets meaningfully distinct.
@@ -405,8 +575,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  generated  {sym}  ({len(df)} rows)")
         ohlcv_map[sym] = df
 
-    # ── Phase 1: bootstrap() ─────────────────────────────────────────────────
-    print(f"\nPhase 1 — bootstrap() ({NUM_SYMBOLS} symbols):")
+    # Phase 1: bootstrap()
+    print(f"\nPhase 1 — bootstrap() ({num_symbols} symbols):")
     t_bs_start = time.perf_counter()
     bootstrap_results = run_bootstrap_benchmarks(symbols, ohlcv_map, config)
     t_bs_total = (time.perf_counter() - t_bs_start) * 1_000
@@ -414,17 +584,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n  Total bootstrap wall-clock: {t_bs_total:.0f} ms  "
           f"({t_bs_total / 60_000:.2f} min)")
 
-    # ── Phase 2: update() ────────────────────────────────────────────────────
-    print(f"\nPhase 2 — update() ({NUM_SYMBOLS} symbols):")
+    # Phase 2: update()
+    print(f"\nPhase 2 — update() ({num_symbols} symbols):")
     update_results = run_update_benchmarks(symbols, ohlcv_map, config)
 
-    # ── Print table ──────────────────────────────────────────────────────────
+    # Print table
     print_table(symbols, bootstrap_results, update_results, ohlcv_map)
 
-    # ── Save JSON ────────────────────────────────────────────────────────────
+    # Save JSON (out_path.parent.mkdir is called inside save_json)
     save_json(symbols, bootstrap_results, update_results, ohlcv_map, args.json_out)
 
-    # ── Exit code: 0 if all update targets pass, 1 otherwise ─────────────────
+    # Exit code: 0 if all update targets pass, 1 otherwise
     failures = [
         sym for sym, ms in update_results.items()
         if ms >= TARGET_UPDATE_MS
@@ -433,7 +603,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n  ✗  {len(failures)} symbol(s) exceeded the update target "
               f"({TARGET_UPDATE_MS} ms): {failures}")
         return 1
-    print(f"  ✓  All {NUM_SYMBOLS} symbols passed the update target "
+    print(f"  ✓  All {num_symbols} symbols passed the update target "
           f"(< {TARGET_UPDATE_MS} ms)\n")
     return 0
 

@@ -48,8 +48,22 @@ export class ApiError extends Error {
 
 // ─── Base helpers ──────────────────────────────────────────────────────────
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+function getBaseUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL;
+  if (!url) {
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "[minervini] NEXT_PUBLIC_API_URL is not set. " +
+        "API calls will fail. Set this variable in Vercel → Settings → " +
+        "Environment Variables before deploying."
+      );
+    }
+    return "http://localhost:8000"; // local dev only
+  }
+  return url.replace(/\/$/, ""); // strip trailing slash
+}
+
+const BASE_URL = getBaseUrl();
 
 const READ_KEY = process.env.NEXT_PUBLIC_API_READ_KEY ?? "";
 
