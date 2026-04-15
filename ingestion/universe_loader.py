@@ -91,6 +91,7 @@ _NIFTY500_PLACEHOLDER: list[str] = [
 
 def load_universe_yaml(
     path: str | Path = "config/universe.yaml",
+    mode_override: str | None = None,
 ) -> list[str]:
     """
     Parse universe.yaml and return a sorted, deduplicated list of
@@ -110,6 +111,11 @@ def load_universe_yaml(
 
     Args:
         path: Path to the universe YAML file.
+        mode_override: When provided, overrides the ``mode`` key in the YAML
+            file.  Accepted values are ``"list"``, ``"nifty500"``, and
+            ``"nse_all"``.  This is used by ``bootstrap.py`` to honour the
+            ``--universe nifty500`` CLI flag even when universe.yaml still has
+            ``mode: "list"``.
 
     Returns:
         Sorted list of validated uppercase symbols.
@@ -140,6 +146,9 @@ def load_universe_yaml(
         ) from exc
 
     mode = str(config.get("mode", "list")).strip().lower()
+    if mode_override is not None:
+        mode = str(mode_override).strip().lower()
+        log.debug("Universe mode overridden by caller", mode=mode)
     log.debug("Universe YAML loaded", path=str(path), mode=mode)
 
     if mode == "list":
@@ -560,6 +569,7 @@ def resolve_symbols(
     cli_watchlist_file: Path | None = None,
     cli_symbols: list[str] | None = None,
     scope: Literal["all", "universe", "watchlist"] = "all",
+    universe_mode: str | None = None,
 ) -> RunSymbols:
     """
     Resolve the final symbol lists for a pipeline run.
@@ -593,6 +603,12 @@ def resolve_symbols(
         cli_symbols:         Optional list of inline symbols passed via --symbols
                              flag (e.g. ["RELIANCE", "TCS"]).  Overrides all.
         scope:               "all" | "universe" | "watchlist"
+        universe_mode:       Optional mode override forwarded to
+                             ``load_universe_yaml()``.  When provided it
+                             replaces the ``mode`` key in universe.yaml so
+                             callers can select "nifty500" or "nse_all" without
+                             editing the YAML file.  Ignored when cli_symbols
+                             is set.
 
     Returns:
         RunSymbols dataclass with .watchlist, .universe, .all, .scope.
@@ -663,7 +679,7 @@ def resolve_symbols(
     # ── Step 3: Load universe.yaml ────────────────────────────────────────────
     universe: list[str] = []
     if scope != "watchlist":
-        universe = load_universe_yaml(config_path)
+        universe = load_universe_yaml(config_path, mode_override=universe_mode)
         log.debug("Universe loaded", count=len(universe))
 
     # ── Step 4: Build the 'all' list — watchlist first, no duplicates ─────────

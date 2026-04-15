@@ -214,48 +214,67 @@ class NSEBhavSource(DataSource):
         )
         return result
 
-    def fetch_universe(self) -> list[str]:
+    def fetch_universe(self, lookback_days: int = 7) -> list[str]:
         """
-        Download today's Bhavcopy and return all SERIES=="EQ" symbols.
+        Download the most recent available Bhavcopy and return all
+        SERIES=="EQ" symbols.
 
-        This is the source-of-truth for "all NSE equities traded today".
-        Falls back to universe.yaml symbols on any fetch or parse failure.
+        Starts from today and walks back up to *lookback_days* calendar days
+        to find the latest available file.  This handles weekends, public
+        holidays, and delays in NSE's archive publication gracefully.
+
+        Falls back to universe.yaml symbols only if every attempt fails.
+
+        Args:
+            lookback_days: How many calendar days back to search before giving
+                           up (default: 7 covers a full week with holidays).
 
         Returns:
             Sorted list of uppercase NSE equity symbol strings.
         """
         today = date.today()
-        try:
-            zip_bytes = self._get_zip(today)
-            if zip_bytes is None:
+
+        for offset in range(lookback_days):
+            candidate = today - timedelta(days=offset)
+            try:
+                zip_bytes = self._get_zip(candidate)
+            except Exception as exc:
                 log.warning(
-                    "Today's bhavcopy unavailable — falling back to universe.yaml",
-                    date=str(today),
+                    "fetch_universe: error fetching bhavcopy",
+                    date=str(candidate),
+                    error=str(exc),
                 )
-                return self._fallback_universe()
+                continue
+
+            if zip_bytes is None:
+                log.debug(
+                    "fetch_universe: bhavcopy unavailable (holiday/weekend)",
+                    date=str(candidate),
+                )
+                continue
 
             symbols = self._parse_symbols(zip_bytes)
             if not symbols:
                 log.warning(
-                    "Bhavcopy contained no EQ symbols — falling back",
-                    date=str(today),
+                    "fetch_universe: bhavcopy had no EQ symbols",
+                    date=str(candidate),
                 )
-                return self._fallback_universe()
+                continue
 
-            log.debug(
+            log.info(
                 "fetch_universe complete",
-                date=str(today),
+                date=str(candidate),
+                days_back=offset,
                 symbol_count=len(symbols),
             )
             return symbols
 
-        except Exception as exc:
-            log.warning(
-                "fetch_universe failed — falling back to universe.yaml",
-                date=str(today),
-                error=str(exc),
-            )
-            return self._fallback_universe()
+        # All attempts exhausted — fall back to universe.yaml
+        log.warning(
+            "fetch_universe: no bhavcopy available in the last "
+            f"{lookback_days} days — falling back to universe.yaml",
+        )
+        return self._fallback_universe()
 
     def fetch_single_day(
         self,

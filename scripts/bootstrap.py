@@ -481,12 +481,18 @@ def main() -> None:
         scope = "universe"
 
     # ── Step 3: Resolve symbols ───────────────────────────────────────────────
+    # Determine whether the --universe flag requests a specific fetch mode
+    # (nifty500 / nse_all) that should override what's written in universe.yaml.
+    universe_mode_override: str | None = (
+        args.universe if args.universe in ("nifty500", "nse_all") else None
+    )
     try:
         run_symbols: RunSymbols = resolve_symbols(
             config_path="config/universe.yaml",
             cli_watchlist_file=None,
             cli_symbols=cli_symbols,
             scope=scope,  # type: ignore[arg-type]
+            universe_mode=universe_mode_override,
         )
     except WatchlistParseError as exc:
         print(f"ERROR [WatchlistParseError]: {exc}", file=sys.stderr)
