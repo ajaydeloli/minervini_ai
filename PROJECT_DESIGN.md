@@ -1,8 +1,8 @@
 # PROJECT_DESIGN.md
 # Minervini SEPA Stock Analysis System
 
-> **Version:** 1.6.0  
-> **Last Updated:** 2026-04-13  
+> **Version:** 1.3.0  
+> **Last Updated:** 2026-04-02  
 > **Methodology:** Mark Minervini's Specific Entry Point Analysis (SEPA)  
 > **Target Market:** NSE / Indian Equities (adaptable to any market)
 
@@ -29,149 +29,6 @@
 17. [Testing Strategy](#17-testing-strategy)
 18. [Deployment & Operations](#18-deployment--operations)
 19. [Design Principles & Anti-Patterns](#19-design-principles--anti-patterns)
-
----
-
-## 🏗️ Build Status
-
-> **Last audited:** 2026-04-13 — Phase 12 complete. All deferred items resolved.
-
-| Phase | Name | Status | Tests | Notes |
-|---|---|---|---|---|
-| **1** | Foundation | ✅ **COMPLETE** | storage, ingestion, universe | `nse_bhav.py` intentionally deferred; yfinance covers all needs |
-| **2** | Feature Engineering | ✅ **COMPLETE** | all feature unit tests passing | Benchmark run 2026-04-05: ~38ms/symbol bootstrap, 47–53ms/symbol update (9/10 pass 50ms target); full 500-symbol live run pending |
-| **3** | Rule Engine | ✅ **COMPLETE** | 504+ passing | `screener/pipeline.py` + `screener/results.py` built here (moved from Phase 4) |
-| **4** | Reports, Charts & Alerts | ✅ **COMPLETE** | daily_watchlist, telegram, risk_reward, email, webhook tests pass | All modules built and wired; `run_daily.py` → `runner.py` ✅; `risk_reward.py` wired ✅; `email_alert.py` ✅; `webhook_alert.py` ✅; Agg backend fix ✅ |
-| **5** | Fundamentals & News | ✅ **COMPLETE** | fundamentals + news unit tests pass | Screener.in scraper + 7-day cache; 7-condition fundamental template; RSS keyword scorer; wired into scorer + pipeline |
-| **6** | LLM Narrative Layer | ✅ **COMPLETE** | llm explainer unit tests pass | All providers built; explainer wired into runner Step 5b; narrative column in HTML report; graceful degradation confirmed |
-| **7** | Paper Trading Simulator | ✅ **COMPLETE** | 29 unit tests passing | `portfolio.py` + `order_queue.py` + `simulator.py` + `report.py`; wired into `pipeline/runner.py`; IST market-hours aware; pyramiding logic |
-| **8** | Backtesting Engine | ✅ **COMPLETE** | backtest unit tests passing | `engine.py` + `portfolio.py` + `metrics.py` + `regime.py` + `report.py`; `backtest_runner.py` CLI; walk-forward; trailing stop with VCP floor; NSE regime calendar; parameter sweep |
-| **9** | Hardening & Production | ✅ **COMPLETE** | run_history, run_meta, benchmark tests pass | All deliverables complete including Prometheus `/metrics` endpoint and GitHub Actions CI (`.github/workflows/ci.yml`) |
-| **10** | API Layer (FastAPI) | ✅ **COMPLETE** | 21 unit tests passing (20 required + 1 slow) | `python-multipart` installed; all routers tested with `TestClient`; DB mocked in-memory; auth + rate-limit verified |
-| **11** | Streamlit Dashboard MVP | ✅ **COMPLETE** | No unit tests (UI layer — Streamlit convention) | `dashboard/app.py` + 5 pages + 3 components + `deploy/minervini-dashboard.service`; dark-theme, watchlist ★ badge, file-upload, [Run Now] trigger, candlestick + MA + VCP chart, TT checklist, fund. scorecard, paper portfolio, backtest viewer |
-| **12** | Next.js Production Frontend | ✅ **COMPLETE** | No unit tests (UI layer) |
-
-
-### What Was Built in Phase 12
-
-| Deliverable | File | Notes | Status |
-|---|---|---|---|
-| Vercel config | `frontend/vercel.json` | `buildCommand`, `outputDirectory`, `framework`, env secret references (`@minervini_api_url`, `@minervini_read_key`, `@minervini_admin_key`) | ✅ |
-| Next.js config migration | `frontend/next.config.mjs` | Converted `next.config.ts` → `.mjs` for Next.js 14 compatibility; rewrites proxy + image remote patterns preserved | ✅ |
-| Password gate middleware | `frontend/middleware.ts` | Optional HttpOnly cookie gate; activates only when `NEXT_PUBLIC_REQUIRE_AUTH=true`; no-op otherwise | ✅ |
-| Login page | `frontend/app/login/page.tsx` | Minimal password form; submits to `/api/auth/login`; redirects to `/` on success | ✅ |
-| Login Route Handler | `frontend/app/api/auth/login/route.ts` | `POST /api/auth/login`; validates against `SITE_PASSWORD` env var; sets HttpOnly cookie (7-day TTL) | ✅ |
-| Dashboard mobile fix | `frontend/app/page.tsx` | Best setups table: Stage, RS, VCP, BO columns hidden on mobile (`hidden sm:table-cell`); only Symbol, Score, Quality shown | ✅ |
-| Symbol page mobile fix | `frontend/app/screener/[symbol]/page.tsx` | Tab labels abbreviated on mobile: `Trend Template→TT`, `Fundamentals→Fund`, `AI Brief→AI`; tooltip formatter type-fixed | ✅ |
-| EquityCurve min-height | `frontend/components/EquityCurve.tsx` | Chart wrapper div gets `min-h-[250px] h-[250px]`; `ResponsiveContainer` uses `height="100%"` | ✅ |
-| 404 page | `frontend/app/not-found.tsx` | "This symbol or page doesn't exist." with ← Back to Screener button | ✅ |
-| Global error boundary | `frontend/app/error.tsx` | Client component; shows error message + digest + [Retry] + [Go to Dashboard] buttons | ✅ |
-| Screener skeleton | `frontend/app/screener/loading.tsx` | Page-level pulse skeleton: header, filter bar, result count, 12 table rows | ✅ |
-| Watchlist skeleton | `frontend/app/watchlist/loading.tsx` | Three-section skeleton: add-symbols card, watchlist table rows, results placeholder | ✅ |
-| Portfolio skeleton | `frontend/app/portfolio/loading.tsx` | 2×3 KPI grid, 250px chart placeholder, tab bar, 5 trade rows | ✅ |
-| README rewrite | `frontend/README.md` | Prerequisites, local dev setup, env var table, optional auth gate, Vercel deployment steps, architecture diagram, scripts table, project structure | ✅ |
-| Production build | — | `npm run build` → 0 TypeScript errors; 12 routes compiled (7 static, 3 dynamic, 2 API) | ✅ |
-
-### What Was Built in Phase 10
-
-| Deliverable | File | Notes | Status |
-|---|---|---|---|
-| FastAPI test suite | `tests/unit/test_api.py` | 21 tests — health, stocks, watchlist, portfolio, run, auth, rate-limit | ✅ |
-| `python-multipart` dep fix | `.venv` | Required by FastAPI form endpoints in `watchlist.py`; was missing from venv | ✅ |
-| Health router tests (4) | tests 01–04 | Status valid/degraded, meta with/without read key | ✅ |
-| Stocks router tests (4) | tests 05–08 | Top list, quality filter, symbol detail, auth guard | ✅ |
-| Watchlist router tests (6) | tests 09–14 | GET, POST valid/invalid symbol, bulk add, DELETE, auth guards | ✅ |
-| Portfolio router tests (2) | tests 15–16 | Portfolio summary + open trades filter | ✅ |
-| Run endpoint tests (2) | tests 17–18 | Admin-only 202 accepted; read-key 403 forbidden | ✅ |
-| Auth tests (2) | tests 19–20 | Wrong key → 403; open mode (no env keys set) → 200 without key | ✅ |
-| Rate-limit test (1, slow) | test 21 | 101 burst GETs → at least one 429; marked `@pytest.mark.slow` | ✅ |
-
-### What Was Built in Phase 11
-
-| Deliverable | File | Notes | Status |
-|---|---|---|---|
-| Streamlit entry point | `dashboard/app.py` | Dark-theme CSS injection (JetBrains Mono, CSS vars); sidebar with market status bar, last-run info, quick stats (A+/A/watchlist counts); home page KPI row + A+ preview table | ✅ |
-| Watchlist page | `dashboard/pages/01_Watchlist.py` | File upload widget (CSV/JSON/XLSX/TXT); manual symbol entry; persistent watchlist table with ★ badge; [Run Watchlist Now] button → `POST /api/v1/run`; today's results with watchlist symbols first | ✅ |
-| Screener page | `dashboard/pages/02_Screener.py` | Full universe results table; quality/stage/RS/sector filters; export to CSV; watchlist filter checkbox | ✅ |
-| Stock deep-dive page | `dashboard/pages/03_Stock.py` | Cached PNG → live mplfinance fallback; score gauge + stage + RS badge; tabbed detail: TT checklist, fundamentals, news sentiment, LLM brief, score history | ✅ |
-| Portfolio page | `dashboard/pages/04_Portfolio.py` | 5 KPI cards (total value, return%, win rate, open positions, realised P&L); open positions table; closed trades history; cumulative P&L equity curve | ✅ |
-| Backtest page | `dashboard/pages/05_Backtest.py` | Backtest equity curve with regime shading (Bull/Bear/Sideways); per-regime stats table; parameter sweep comparison | ✅ |
-| Charts component | `dashboard/components/charts.py` | `render_candlestick_chart()` — mplfinance + MA ribbon + VCP gold zone + stage label + quality badge + entry/stop hlines; `render_cached_chart()` — serve pre-built PNGs; `render_equity_curve()` — cumulative P&L; `render_backtest_equity_curve()` — regime-shaded portfolio curve | ✅ |
-| Tables component | `dashboard/components/tables.py` | `render_sepa_results_table()` — pandas Styler + quality/score colour coding + ★ watchlist row highlight + WL filter checkbox; `render_portfolio_table()` — open positions with P&L colour; `render_trades_history_table()` — closed trades + R-Multiple colour; `render_backtest_summary_table()` — regime breakdown | ✅ |
-| Metrics component | `dashboard/components/metrics.py` | `render_score_gauge()` — metric + progress bar + quality badge; `render_trend_template_checklist()` — 8-condition two-column grid; `render_fundamental_scorecard()` — 7-condition checklist; `render_vcp_summary()` — grade + metric cards; `render_run_summary_kpis()` — 4 KPI row; `render_portfolio_kpis()` — 5 KPI row | ✅ |
-| systemd service | `deploy/minervini-dashboard.service` | `Type=simple; Restart=always`; `streamlit run dashboard/app.py --server.port 8501 --server.headless true`; depends on `minervini-api.service` | ✅ |
-
-### What Was Built in Phase 3
-
-| Module | File | Key Capability | Status |
-|---|---|---|---|
-| Stage detection | `rules/stage.py` | Hard gate — Stage 1/2/3/4 with confidence score; NaN → RuleEngineError | ✅ |
-| Trend Template | `rules/trend_template.py` | All 8 Minervini conditions; configurable thresholds; fail-loud | ✅ |
-| VCP qualification | `rules/vcp_rules.py` | Grade A/B/C/FAIL + 0–100 score; passes through feature-layer failures | ✅ |
-| Entry trigger | `rules/entry_trigger.py` | Pivot breakout + volume confirmation; NaN pivot → graceful non-trigger | ✅ |
-| Stop loss | `rules/stop_loss.py` | VCP base-low (primary) + ATR fallback + max-risk cap | ✅ |
-| SEPA scorer | `rules/scorer.py` | Weighted composite 0–100; Stage 2 hard gate; SEPAResult + to_dict() | ✅ |
-| Screener pipeline | `screener/pipeline.py` | `run_screen()` with ProcessPoolExecutor parallel execution | ✅ |
-| Screener results | `screener/results.py` | `persist_results()` → `sepa_results` SQLite table; `load_results()` query helper | ✅ |
-| Stage unit tests | `tests/unit/test_stage_detection.py` | 25 tests — all 4 stages, NaN errors, parametrized condition failures | ✅ |
-| Scorer unit tests | `tests/unit/test_scorer.py` | 19 tests — hard gate, A+ logic, weighted sum, stop/risk propagation | ✅ |
-| Screener pipeline tests | `tests/unit/test_screener_pipeline.py` | 14 tests — stage gate, None handling, sort order, mock executor | ✅ |
-| Screener results tests | `tests/unit/test_screener_results.py` | persist + load + duplicate-skip tests | ✅ |
-| Integration tests | `tests/integration/test_known_setups.py` | 6 regression tests — Stage 4 blocked despite all-8-TT-pass, A+ pipeline, partial-TT | ✅ |
-
-### What Was Built in Phase 4 (Audit Result)
-
-| Module | File | Status | Notes |
-|---|---|---|---|
-| R:R estimator | `rules/risk_reward.py` | ✅ Complete | `compute_rr()` called in `_screen_single()` after `compute_stop_loss()`; `rr_ratio`, `target_price`, `reward_pct`, `has_resistance` wired into `SEPAResult`, `to_dict()`, and `sepa_results` schema |
-| Batch screener wiring | `screener/pipeline.py` | ✅ Complete | Already listed under Phase 3 above |
-| Results persistence | `screener/results.py` | ✅ Complete | Already listed under Phase 3 above |
-| Daily watchlist report | `reports/daily_watchlist.py` | ✅ Complete | CSV + HTML; Jinja2; watchlist priority sort |
-| HTML template | `reports/templates/watchlist.html.j2` | ✅ Complete | Dark-mode, A+/A table, badges, star marker |
-| Chart generator | `reports/chart_generator.py` | ✅ Complete | Candlestick + MA ribbon + stage + quality badge + entry/stop + VCP base zone rectangle; Agg backend `matplotlib.use("Agg")` moved to top of `_generate_chart_impl()` before mplfinance import |
-| Telegram alerts | `alerts/telegram_alert.py` | ✅ Complete | MarkdownV2, watchlist star, quality filter, error handling |
-| Email alerts | `alerts/email_alert.py` | ✅ Complete | `EmailAlert(BaseAlert)` with SMTP (port 587 STARTTLS / 465 SSL); multipart plain+HTML; same send() interface as TelegramAlert; credentials from env vars |
-| Webhook alerts | `alerts/webhook_alert.py` | ✅ Complete | `WebhookAlert(BaseAlert)`; Slack-compatible JSON blocks + plain format; multi-URL; partial-failure counting |
-| Pipeline runner | `pipeline/runner.py` | ✅ Complete | 13-step orchestrator; all outputs wired |
-| Scheduler | `pipeline/scheduler.py` | ✅ Complete | APScheduler Mon–Fri 15:35 IST |
-| `run_daily.py` Phase 4 wiring | `scripts/run_daily.py` | ✅ Complete | CLI delegates to `pipeline.runner.run(context)`; `RunContext` built from CLI args; all 13 steps (features → screen → reports → charts → Telegram + Email + Webhook → finish_run) fire on every `python scripts/run_daily.py` call |
-| Risk/reward unit tests | `tests/unit/test_risk_reward.py` | ✅ 30+ tests | All target fallback paths covered |
-| Watchlist report tests | `tests/unit/test_daily_watchlist.py` | ✅ 5 tests | CSV columns, HTML generation, sort order |
-| Telegram alert tests | `tests/unit/test_telegram_alert.py` | ✅ 10 tests | Disabled path, filter, star prefix, HTTP errors |
-
-### Phase 4 Completed Fixes (Applied 2026-04-09)
-
-All six remaining items from the original Phase 4 audit have been resolved:
-
-1. ✅ **[Priority 1] Wire `scripts/run_daily.py` → `pipeline/runner.py`** — `run_daily.py` now builds a `RunContext` from CLI args and delegates all pipeline work to `pipeline_run(context)`. Reports, charts, and all three alert channels fire on every CLI / scheduled run.
-2. ✅ **[Priority 2] Wire `rules/risk_reward.py` into `screener/pipeline._screen_single()`** — `compute_rr()` is called at step 8b after `compute_stop_loss()`. `SEPAResult` extended with `rr_ratio`, `target_price`, `reward_pct`, `has_resistance`. `to_dict()` updated. `sepa_results` table includes all four columns (with migration guard for pre-Phase-4 databases).
-3. ✅ **[Priority 3] Fix `chart_generator.py` Agg backend bug** — `import matplotlib; matplotlib.use("Agg")` moved to the very top of `_generate_chart_impl()`, before `import mplfinance`. Headless rendering now works on all servers.
-4. ✅ **[Priority 4] Build `alerts/email_alert.py`** — `EmailAlert(BaseAlert)` implemented with SMTP STARTTLS/SSL, multipart plain-text + HTML bodies, quality filter, watchlist-star logic. Wired into pipeline/runner.py Step 11b.
-5. ✅ **VCP base zone drawn on charts** — Shaded gold rectangle (`alpha=0.08`) + dashed border (`alpha=0.6`) now drawn in `_generate_chart_impl()` when `vcp_qualified=True`, spanning `base_bars` candles from entry pivot to `base_window_low`.
-6. ✅ **Build `alerts/webhook_alert.py`** — `WebhookAlert(BaseAlert)` dispatches Slack-compatible JSON blocks (or plain JSON) to one or more webhook URLs. Wired into pipeline/runner.py Step 11c.
-
-### Phase 4 Post-Completion Audit (2026-04-13)
-
-All three items previously listed as "remaining work" are now confirmed complete:
-
-- ✅ **Email alert unit tests** — `tests/unit/test_email_alert.py` — 13 tests covering disabled path, SMTP errors (auth + socket), quality filtering, watchlist override, sort order, plain/HTML body helpers, `rr_ratio=None` edge case, and SSL port (465) path.
-- ✅ **Webhook alert unit tests** — `tests/unit/test_webhook_alert.py` — tests covering disabled/no-URL path, single/multi-URL success, partial failure, `WebhookAlertError`, quality filtering, watchlist B override, both payload builders (`_slack_payload` + `_plain_payload`), format dispatch, and URL deduplication.
-- ✅ **Feature pipeline benchmark** — `data/benchmarks/feature_pipeline_2026-04-05.json` — 10 synthetic symbols: bootstrap avg ~38ms/symbol, update avg ~49ms/symbol (9/10 pass the 50ms target; BENCH_S000 hit 52.6ms on first-symbol JIT warmup). Full 500-symbol live run is a nice-to-have, not blocking anything.
-
-### What Was Built in Phase 5
-
-| Module | File | Key Capability | Status |
-|---|---|---|---|
-| Fundamentals scraper | `ingestion/fundamentals.py` | Screener.in HTTP scraper; 7-day JSON cache per symbol in `data/fundamentals/`; returns PE, ROE, D/E, EPS values, sales growth, promoter holding | ✅ |
-| Fundamental template | `rules/fundamental_template.py` | 7 Minervini fundamental conditions (EPS positive, EPS accelerating, sales growth ≥10%, ROE ≥15%, D/E ≤1.0, promoter holding ≥35%, positive profit growth); `FundamentalResult` with `passes`, `conditions_met`, `conditions` dict, `fundamental_score` | ✅ |
-| News ingestion | `ingestion/news.py` | RSS feed fetcher (MoneyControl, ET, BS); 30-min cache; keyword sentiment scorer; `compute_news_score()` → −100..+100 float | ✅ |
-| Symbol aliases | `config/symbol_aliases.yaml` | Alias map for news article matching (e.g. RELIANCE → "reliance industries", "ril") | ✅ |
-| Scorer wiring | `rules/scorer.py` | `evaluate()` accepts `fundamental_result` and `news_score`; `fundamental_score` and rescaled `news_score_val` feed into weighted composite; `SEPAResult.fundamental_pass`, `.fundamental_details`, `.news_score` populated; `to_dict()` serialises all three | ✅ |
-| HTML report | `reports/templates/watchlist.html.j2` | Fund. column: pass/fail badge + conditions met + ROE / D/E / EPS Accel / Sales / Promoter; News column: colour-coded Positive / Neutral / Negative / N/A badge; safe for empty `fundamental_details` | ✅ |
-| CSV export | `reports/daily_watchlist.py` | `_CSV_COLUMNS` extended with `fundamental_pass`, `fundamental_details`, `news_score` | ✅ |
-| Telegram alert | `alerts/telegram_alert.py` | Per-stock `Fundamentals: ✅ (N/7)` or `❌ (N/7)` or `N/A` line added after VCP/Breakout line | ✅ |
-| Fundamentals unit tests | `tests/unit/test_fundamentals.py` | Known PE/ROE/EPS fixture values → expected pass/fail per condition | ✅ |
-| News unit tests | `tests/unit/test_news.py` | Keyword scorer: bullish/bearish article fixtures → expected score ranges | ✅ |
 
 ---
 
@@ -1726,87 +1583,69 @@ frontend/
 ### Phase 1 — Foundation (Weeks 1–3)
 **Goal:** Raw data flowing into clean, queryable storage.
 
-- [x] Set up project skeleton (all directories, `__init__.py`, `pyproject.toml`)
-- [x] Implement `ingestion/base.py` abstract interface
-- [ ] Implement `ingestion/nse_bhav.py` (NSE Bhavcopy daily download) ← **NOT BUILT** — deferred to Phase 4; yfinance covers backfill
-- [x] Implement `ingestion/yfinance_source.py` (historical backfill)
-- [x] Implement `ingestion/validator.py` (schema + sanity checks)
-- [x] Implement `ingestion/universe_loader.py` — unified symbol resolver with watchlist + universe merge
-- [x] Implement `load_watchlist_file()` — parse CSV / JSON / XLSX / TXT watchlist files
-- [x] SQLite `watchlist` table (symbol, note, added_via, last_score, last_quality)
-- [x] Implement `storage/parquet_store.py` with atomic append support
-- [x] Implement `utils/logger.py`, `utils/date_utils.py`, `utils/exceptions.py`, `utils/math_utils.py`
-- [x] Write `scripts/run_daily.py` with `--watchlist`, `--symbols`, `--watchlist-only`, `--scope` flags (Phase 1 skeleton — feature + screen hooks wired in Phase 2/3)
-- [x] Write `scripts/bootstrap.py` skeleton (full history download — feature compute wired in Phase 2)
-- [x] `config/settings.yaml` with all Phase 1 parameters including watchlist config
-- [x] Unit tests for storage layer (`test_parquet_store.py`, `test_sqlite_store.py`, `conftest.py`)
-- [x] Unit tests for `load_watchlist_file()` and `resolve_symbols()` (`test_universe_loader.py`)
-- [x] **Deliverable:** `python scripts/run_daily.py --watchlist mylist.csv` resolves symbols from file. `python scripts/run_daily.py --symbols "RELIANCE,DIXON"` resolves inline symbols. Default run merges watchlist + universe. (Feature compute + screening wired in Phases 2–3.)
-
-**Phase 1 status: ✅ COMPLETE** — one item intentionally deferred:
-- `ingestion/nse_bhav.py` — NSE Bhavcopy downloader deferred to Phase 4 (yfinance covers all backfill needs through Phase 3)
+- [ ] Set up project skeleton (all directories, `__init__.py`, `pyproject.toml`)
+- [ ] Implement `ingestion/base.py` abstract interface
+- [ ] Implement `ingestion/nse_bhav.py` (NSE Bhavcopy daily download)
+- [ ] Implement `ingestion/yfinance_source.py` (historical backfill)
+- [ ] Implement `ingestion/validator.py` (schema + sanity checks)
+- [ ] Implement `ingestion/universe_loader.py` — unified symbol resolver with watchlist + universe merge
+- [ ] Implement `load_watchlist_file()` — parse CSV / JSON / XLSX / TXT watchlist files
+- [ ] SQLite `watchlist` table (symbol, note, added_via, last_score, last_quality)
+- [ ] Implement `storage/parquet_store.py` with atomic append support
+- [ ] Implement `utils/logger.py`, `utils/date_utils.py`, `utils/exceptions.py`
+- [ ] Write `scripts/run_daily.py` with `--watchlist`, `--symbols`, `--watchlist-only`, `--scope` flags
+- [ ] Write `scripts/bootstrap.py` skeleton (full history download)
+- [ ] `config/settings.yaml` with all Phase 1 parameters including watchlist config
+- [ ] Unit tests for `load_watchlist_file()` (CSV, JSON, XLSX, invalid symbols, empty file)
+- [ ] **Deliverable:** `python scripts/run_daily.py --watchlist mylist.csv` analyses only the symbols in the file. `python scripts/run_daily.py --symbols "RELIANCE,DIXON"` analyses inline symbols. Default run analyses watchlist + universe together.
 
 ---
 
 ### Phase 2 — Feature Engineering (Weeks 4–6)
 **Goal:** All Minervini-relevant indicators computed and stored.
 
-- [x] `features/moving_averages.py` — SMA 10/21/50/150/200, EMA 21, slopes (SMA_150 explicit, no fallback)
-- [x] `features/relative_strength.py` — RS raw + RS rating (vs. Nifty 500)
-- [x] `features/atr.py` — ATR 14, ATR%
-- [x] `features/volume.py` — vol ratio, acc/dist, up/down vol days
-- [x] `features/pivot.py` — swing high/low detection (ZigZag method, configurable sensitivity)
-- [x] `features/vcp.py` — contraction detection, tightness, vol dry-up
-- [x] `features/feature_store.py` — `bootstrap()` + `update()` + `needs_bootstrap()` (see Section 5)
-- [x] Unit tests for all feature modules with fixture data (`test_moving_averages.py`, `test_relative_strength.py`, `test_atr.py`, `test_volume.py`, `test_pivot.py`, `test_vcp.py`, `test_feature_store.py`)
-- [x] Benchmark: bootstrap for 500 symbols < 15 min; daily incremental update < 50 ms/symbol ← **run 2026-04-05** (10 synthetic symbols; 9/10 pass; full 500-symbol live run is a nice-to-have)
-- [x] **Deliverable:** Feature pipeline fully wired — `bootstrap()` computes full history, `update()` appends one row per run, all modules tested with fixture data.
-
-**Phase 2 status: ✅ COMPLETE** — benchmark run 2026-04-05 confirms targets are met (10 synthetic symbols; ~38ms bootstrap/symbol, ~49ms update/symbol average). Full 500-symbol live-data run is a nice-to-have for future confirmation.
+- [ ] `features/moving_averages.py` — SMA 10/21/50/150/200, EMA 21, slopes (SMA_150 explicit, no fallback)
+- [ ] `features/relative_strength.py` — RS raw + RS rating (vs. Nifty 500)
+- [ ] `features/atr.py` — ATR 14, ATR%
+- [ ] `features/volume.py` — vol ratio, acc/dist, up/down vol days
+- [ ] `features/pivot.py` — swing high/low detection (ZigZag method, configurable sensitivity)
+- [ ] `features/vcp.py` — contraction detection, tightness, vol dry-up
+- [ ] `features/feature_store.py` — `bootstrap()` + `update()` + `needs_bootstrap()` (see Section 5)
+- [ ] Unit tests for all feature modules with fixture data
+- [ ] Benchmark: bootstrap for 500 symbols < 15 min; daily incremental update < 30 seconds
+- [ ] **Deliverable:** `data/features/RELIANCE.parquet` with all indicators for 5 years of history. Daily `update()` appends one row in < 50ms per symbol.
 
 ---
 
 ### Phase 3 — Rule Engine (Weeks 7–9)
 **Goal:** Deterministic, fully testable SEPA screening logic.
 
-- [x] `rules/stage.py` — Stage 1/2/3/4 detection with confidence score (runs first, hard gate)
-- [x] `rules/trend_template.py` — all 8 conditions, configurable thresholds
-- [x] `rules/vcp_rules.py` — VCP qualification rules (grade A/B/C/FAIL + 0–100 score)
-- [x] `rules/entry_trigger.py` — pivot breakout detection with volume confirmation
-- [x] `rules/stop_loss.py` — stop below VCP base_low (primary) + ATR fallback + max-risk cap
-- [x] `rules/scorer.py` — weighted scoring + `SEPAResult` dataclass (stage hard gate; fundamentals/news placeholders)
-- [x] Unit tests: `test_stage_detection.py` (25 tests), `test_trend_template.py` (29 tests), `test_vcp_rules.py` (46 tests), `test_scorer.py` (19 tests) — all synthetic pd.Series, no file I/O
-- [x] Integration test: `tests/integration/test_known_setups.py` — Stage 4 hard gate regression, A+ full pipeline, partial-TT smoke tests (6 tests)
-- [x] `rules/risk_reward.py` — R:R estimator using nearest resistance ✅ built and wired into Phase 4
-- [x] `screener/pipeline.py` — batch screener with parallel execution ✅
-- [x] `screener/results.py` — persist results to SQLite ✅
-- [x] **Deliverable:** `python scripts/run_daily.py --date 2024-01-15` produces a ranked watchlist. All non-Stage-2 stocks are correctly filtered out.
-
-**Phase 3 status: ✅ COMPLETE** — 504+ tests passing. All rule modules complete. Screener wiring (`pipeline.py` + `results.py`) completed ahead of schedule during Phase 3/4 overlap. `risk_reward.py` built and wired into Phase 4.
+- [ ] `rules/stage.py` — Stage 1/2/3/4 detection with confidence score (runs first, hard gate)
+- [ ] `rules/trend_template.py` — all 8 conditions, configurable thresholds
+- [ ] `rules/vcp_rules.py` — VCP qualification rules
+- [ ] `rules/entry_trigger.py` — pivot breakout detection with volume confirmation
+- [ ] `rules/stop_loss.py` — stop below VCP base_low (primary) + ATR fallback
+- [ ] `rules/risk_reward.py` — R:R estimator using nearest resistance
+- [ ] `rules/scorer.py` — weighted scoring + `SEPAResult` dataclass (includes stage, fundamentals, news fields)
+- [ ] Unit tests: known VCP patterns with expected scores; Stage detection with synthetic MA data
+- [ ] Integration test: screen Nifty 500 on historical date, verify known setups appear
+- [ ] `screener/pipeline.py` — batch screener with parallel execution
+- [ ] `screener/results.py` — persist results to SQLite
+- [ ] **Deliverable:** `python scripts/run_daily.py --date 2024-01-15` produces a ranked watchlist. All non-Stage-2 stocks are correctly filtered out.
 
 ---
 
 ### Phase 4 — Reports, Charts & Alerts (Weeks 10–12)
-**Goal:** Human-consumable outputs and alert dispatch. Also completes the Phase 3→4 bridge items (screener wiring + R:R).
+**Goal:** Human-consumable outputs and alert dispatch.
 
-**Inherited from Phase 3 (now COMPLETE):**
-- [x] `screener/pipeline.py` — batch screener: load feature row → detect_stage → check_trend_template → check_vcp → check_entry_trigger → compute_stop_loss → evaluate() → SEPAResult; parallel execution via ProcessPoolExecutor ✅
-- [x] `screener/results.py` — persist SEPAResult list to SQLite (`sepa_results` table); query helpers for API/dashboard ✅
-- [x] `rules/risk_reward.py` — R:R estimator built and wired into `screener/pipeline.py` ✅
-- [x] `screener/pipeline.py` wired into `scripts/run_daily.py` so `--date` flag produces a printed ranked result list ✅ (reports/alerts wired via `runner.py` delegation)
-
-**Phase 4 core deliverables:**
-- [x] `reports/daily_watchlist.py` — CSV + HTML report ✅
-- [x] `reports/chart_generator.py` — candlestick + MA ribbons + stage annotation + VCP base zone ✅
-- [x] `reports/templates/watchlist.html.j2` — styled HTML template ✅
-- [x] `alerts/telegram_alert.py` — daily watchlist to Telegram channel ✅
-- [x] `alerts/email_alert.py` — SMTP summary ✅
-- [x] `alerts/webhook_alert.py` — generic webhook (Slack, Discord) ✅
-- [x] `pipeline/scheduler.py` — APScheduler job at market close (15:35 IST) ✅
-- [x] `pipeline/runner.py` — unified 13-step entry point (daily mode); reports + charts + alerts all wired ✅
-- [x] **`scripts/run_daily.py` → `pipeline/runner.py` unification** ✅ — CLI delegates all pipeline work to `pipeline.runner.run(context)`
-
-**Phase 4 status: ✅ COMPLETE** — All modules built and wired. `risk_reward.py` fully wired into `screener/pipeline._screen_single()`. `email_alert.py` and `webhook_alert.py` built and wired. `run_daily.py` delegates to `runner.py`.
+- [ ] `reports/daily_watchlist.py` — CSV + HTML report
+- [ ] `reports/chart_generator.py` — candlestick + MA ribbons + VCP markup + stage annotation
+- [ ] `reports/templates/watchlist.html.j2` — styled HTML template
+- [ ] `alerts/telegram_alert.py` — daily watchlist to Telegram channel
+- [ ] `alerts/email_alert.py` — optional SMTP summary
+- [ ] `pipeline/scheduler.py` — APScheduler job at market close (15:30 IST)
+- [ ] `pipeline/runner.py` — unified entry point (daily / historical / backtest modes)
+- [ ] **Deliverable:** Every trading day at 15:35 IST, a Telegram message lists today's A+ and A setups with chart images.
 
 ---
 
@@ -1828,86 +1667,31 @@ frontend/
 ### Phase 6 — LLM Narrative Layer (Weeks 15–16)
 **Goal:** AI-generated trade briefs as an optional overlay.
 
-**Phase 6 status: ✅ COMPLETE** — All modules built, wired, and tested. GeminiClient added as a bonus sixth provider.
-
-- [x] `llm/llm_client.py` — abstract `LLMClient` ABC + `get_llm_client()` factory
-- [x] `llm/explainer.py` — `generate_trade_brief()` + `generate_watchlist_summary()`
-- [x] Jinja2 prompt templates — `trade_brief.j2` (stage, VCP, fundamentals, news, OHLCV levels in context) + `watchlist_summary.j2`
-- [x] Implement `GroqClient` (default — `llama-3.3-70b-versatile`, free, fast)
-- [x] Implement `AnthropicClient` (`claude-haiku-4-5`) and `OpenAIClient` (`gpt-4o-mini`)
-- [x] Implement `OllamaClient` for local fallback (OpenAI-compatible endpoint)
-- [x] Implement `OpenRouterClient` (`deepseek/deepseek-r1:free` for best reasoning)
-- [x] Implement `GeminiClient` (`gemini-2.0-flash`) — bonus sixth provider
-- [x] Wire into `pipeline/runner.py` Step 5b — iterates results, loads `ohlcv_tail` from feature Parquet, calls `generate_trade_brief()`, stamps `r.narrative`, calls `generate_watchlist_summary()` for daily summary
-- [x] Add narrative field to HTML report — "Trade Brief" column in both A+/A table and All Results table; collapsible `🤖 AI Brief` details element
-- [x] Token cost logging per run — all providers log `input_tokens` + `output_tokens` via `log.debug("LLM token usage", ...)`
-- [x] Graceful degradation — every error path returns `None`; Step 5b wrapped in `try/except`; pipeline never aborts on LLM failure
-- [x] Unit tests — `tests/unit/test_llm_explainer.py` (12 tests: disabled path, quality filter, success paths, LLMProviderError, generic exception, empty ohlcv_tail, client=None, watchlist summary success/error/empty/disabled)
-- [x] **Deliverable:** HTML report includes a 3-sentence AI trade brief for each A+/A setup. Groq free tier used by default. Brief shows as collapsible `🤖 AI Brief` in the Trade Brief column; `—` when LLM is disabled or quality filtered.
+- [ ] `llm/llm_client.py` — abstract LLM client
+- [ ] `llm/explainer.py` — `generate_trade_brief()` + `generate_watchlist_summary()`
+- [ ] Jinja2 prompt templates (include stage, fundamentals, news in context)
+- [ ] Implement `GroqClient` (default — free, fast)
+- [ ] Implement `AnthropicClient` and `OpenAIClient`
+- [ ] Implement `OllamaClient` for local fallback
+- [ ] Implement `OpenRouterClient` (deepseek-r1:free for best reasoning)
+- [ ] Add narrative field to HTML report
+- [ ] Token cost logging per run
+- [ ] Graceful degradation (LLM failure → skip narrative, log warning)
+- [ ] **Deliverable:** HTML report includes a 3-sentence AI trade brief for each A+/A setup. Groq free tier used by default.
 
 ---
-
-### What Was Built in Phase 7
-
-| Module | File | Key Capability | Status |
-|---|---|---|---|
-| Portfolio engine | `paper_trading/portfolio.py` | SQLite-backed positions + cash ledger; `open_position()`, `close_position()`, `reset_portfolio()`; `PaperTradingError` on bad state | ✅ |
-| Order queue | `paper_trading/order_queue.py` | IST market-hours gate (`is_market_open()`); `queue_order()` upserts pending orders; `execute_pending_orders()` fills at open price; `cancel_expired_orders()` | ✅ |
-| Simulator | `paper_trading/simulator.py` | `enter_trade()` (score/quality/duplicate/max-positions gates); `check_exits()` (stop-loss + target); `pyramid_position()` (VCP-A add-on); `process_screen_results()` pipeline entry point | ✅ |
-| Report | `paper_trading/report.py` | `PortfolioSummary` dataclass; `get_portfolio_summary()` (unrealised + realised PnL, win rate); `format_summary_text()` (human-readable); `get_performance_by_quality()` | ✅ |
-| Pipeline wiring | `pipeline/runner.py` | `process_screen_results()` called after daily screen; `get_portfolio_summary()` logged at run end | ✅ |
-| Unit tests | `tests/unit/test_paper_trading.py` | 29 tests, all passing (1.94 s) — portfolio CRUD, IST market-hours, queue/execute/expire, enter/exit/pyramid gates, report metrics | ✅ |
-
----
-
-### Phase 7 Completed Details (Applied 2026-04-11)
-
-All six deliverables from the Phase 7 roadmap are resolved:
-
-1. ✅ **`paper_trading/portfolio.py`** — SQLite schema (`paper_positions` + `paper_portfolio_state` singleton); `init_paper_trading_tables()` idempotent; `open_position()` deducts cash in same transaction with insufficient-cash guard; `close_position()` credits proceeds + increments `win_trades`; `reset_portfolio()` hard-wipes all positions.
-2. ✅ **`paper_trading/order_queue.py`** — `is_market_open(dt)` checks weekday + IST 09:15–15:30; `queue_order()` uses `INSERT OR REPLACE` (one pending order per symbol); `execute_pending_orders()` fills at `current_prices[symbol]`, sizes from config `risk_per_trade_pct`; `cancel_expired_orders()` deletes rows where `expires_at < today`.
-3. ✅ **`paper_trading/simulator.py`** — `enter_trade()` enforces score ≥ 70, quality ∈ {A+, A}, no duplicate symbol, `len(positions) < max_positions`; routes to `open_position()` when market open, `queue_order()` when closed; `check_exits()` triggers stop-loss or target close; `pyramid_position()` gates on VCP grade A + vol_ratio < 0.4 + price drift ≤ 2% + not-yet-pyramided.
-4. ✅ **`paper_trading/report.py`** — `get_portfolio_summary()` read-only; `unrealised_pnl` from `current_prices` (fallback to entry_price); `win_rate` = wins / closed × 100; `format_summary_text()` returns multi-line string with "📊 Paper Portfolio Summary" header; `get_performance_by_quality()` grouped win-rate by setup_quality.
-5. ✅ **Pyramiding logic** — `pyramid_position()` in `simulator.py`; add-on qty = `floor(original_qty × 0.5)`; `mark_pyramided()` called on the original row so the flag prevents a second add.
-6. ✅ **Pipeline wiring** — `pipeline/runner.py` calls `process_screen_results(results, db_path, config)` and logs the returned summary dict; `get_portfolio_summary()` printed at run end.
-
----
-
-### What Was Built in Phase 9
-
-| Module | File | Key Capability | Status |
-|---|---|---|---|
-| Structured logger | `utils/logger.py` | `_JSONFormatter` (production) + `_DevFormatter` (dev/colour); `TimedRotatingFileHandler` 30-day rotation; per-module level overrides from `config/logging.yaml`; `StructuredLogger` wrapper for `key=value` kwargs | ✅ |
-| Logging config | `config/logging.yaml` | Console + rotating-file handlers; third-party library silencing (yfinance, urllib3, matplotlib) | ✅ |
-| Run metadata | `utils/run_meta.py` | `get_git_sha()` → 8-char short SHA via `git rev-parse --short HEAD`; `get_config_hash(path)` → 8-char MD5 fingerprint of settings.yaml; both return `'unknown'` on any error | ✅ |
-| Data lineage in RunContext | `pipeline/context.py` | `config_hash()` → SHA-256 of serialised config dict; `git_sha()` → full HEAD SHA; both stored in `run_history` via `log_run()` | ✅ |
-| Makefile | `Makefile` | 13 targets: `install`, `test`, `test-fast`, `lint`, `format`, `format-check`, `daily`, `backtest`, `rebuild`, `paper-reset`, `api`, `dashboard`, `clean`, `help` | ✅ |
-| systemd service files | `deploy/minervini-daily.service` | `Type=oneshot`; `EnvironmentFile`; 30-min `TimeoutStartSec`; journal logging | ✅ |
-| systemd timer | `deploy/minervini-daily.timer` | `OnCalendar=Mon-Fri 15:35 Asia/Kolkata`; `Persistent=true`; `RandomizedDelaySec=30` | ✅ |
-| API + dashboard services | `deploy/minervini-api.service`, `deploy/minervini-dashboard.service` | `Type=simple`; `Restart=always`; uvicorn + streamlit process management | ✅ |
-| Deploy scripts | `deploy/install.sh`, `deploy/uninstall.sh` | Enable/disable all three systemd units in one command | ✅ |
-| Runbook | `RUNBOOK.md` | Daily ops; add watchlist symbol; add universe; corrupt store recovery; add new rule condition; add new data source; threshold tuning; common errors + fixes; performance benchmarks | ✅ |
-| Feature benchmark | `scripts/benchmark_features.py` | Measures `bootstrap()` + `update()` wall-clock time across 10 synthetic symbols; extrapolates to 500/2000-symbol production runs; JSON trend-tracking output to `data/benchmarks/`; exit code 1 if update target exceeded | ✅ |
-| Run history unit tests | `tests/unit/test_run_history.py` | 5 tests: full `log_run`→`finish_run` round-trip, `get_git_sha()` type/length, `get_config_hash()` 8-hex-char contract, unknown `run_id` graceful no-op, `get_last_run()` most-recent-row semantics | ✅ |
-| (Optional) Prometheus endpoint | `api/main.py` | **Built** — `_PrometheusMiddleware` tracks all requests; `last_run_duration_sec` + `last_run_a_plus_count` Gauges updated after every pipeline run; `/metrics` WSGI endpoint via `a2wsgi`. | ✅ |
-| (Optional) GitHub Actions CI | `.github/workflows/ci.yml` | **Built** — 3-job workflow: `lint` (ruff check + format), `test` (unit tests, Python 3.11 + 3.12 matrix, coverage upload), `slow-tests` (push-only, rate-limit burst test). | ✅ |
-
----
-
 
 ### Phase 7 — Paper Trading Simulator (Weeks 17–18)
 **Goal:** Validate live signals in real-time before backtesting or going live.
 
-- [x] `paper_trading/simulator.py` — `enter_trade()`, `exit_position()`, `check_exits()`
-- [x] `paper_trading/portfolio.py` — portfolio state, P&L, win rate
-- [x] `paper_trading/order_queue.py` — market-hours aware pending order queue
-- [x] `paper_trading/report.py` — performance summary: return, win rate, avg R-multiple
-- [x] Pyramiding logic — add to winning VCP Grade A positions (50% of original qty, one add only)
-- [x] Wire into `pipeline/runner.py` — paper trades executed automatically after daily screen
-- [x] Unit tests: enter/exit/pyramid scenarios with known prices (29 tests passing)
-- [x] **Deliverable:** After every daily screen, A+/A signals automatically create paper trades. Portfolio state persisted in SQLite. Run for 4–8 weeks before backtesting.
-
-**Phase 7 status: ✅ COMPLETE** — All modules built, wired, and tested.
+- [ ] `paper_trading/simulator.py` — `enter_trade()`, `exit_position()`, `check_exits()`
+- [ ] `paper_trading/portfolio.py` — portfolio state, P&L, win rate
+- [ ] `paper_trading/order_queue.py` — market-hours aware pending order queue
+- [ ] `paper_trading/report.py` — performance summary: return, win rate, avg R-multiple
+- [ ] Pyramiding logic — add to winning VCP Grade A positions (50% of original qty, one add only)
+- [ ] Wire into `pipeline/runner.py` — paper trades executed automatically after daily screen
+- [ ] Unit tests: enter/exit/pyramid scenarios with known prices
+- [ ] **Deliverable:** After every daily screen, A+/A signals automatically create paper trades. Portfolio state persisted in `data/paper_trading/`. Run for 4–8 weeks before backtesting.
 
 ---
 
@@ -1936,15 +1720,15 @@ All six deliverables from the Phase 7 roadmap are resolved:
 ### Phase 9 — Hardening & Production (Weeks 23–26)
 **Goal:** Production-ready pipeline on Ubuntu server (ShreeVault).
 
-- [x] Structured logging (JSON format) with log rotation
-- [x] Prometheus metrics endpoint (`/metrics` via `api/main.py`)
-- [x] Full test coverage: unit + integration + smoke tests
-- [x] CI pipeline: `.github/workflows/ci.yml` — lint + unit tests (3.11/3.12 matrix) + slow tests
-- [x] Data lineage: every run logs data hash, config snapshot, Git commit SHA
-- [x] `Makefile` with targets: `test`, `lint`, `format`, `daily`, `backtest`, `rebuild`, `paper-reset`
-- [x] `systemd` service file for automated daily run
-- [x] Runbook: how to add a new data source, how to add a new rule condition
-- [x] **Deliverable:** Pipeline runs unattended on ShreeVault, self-monitors, alerts on failure.
+- [ ] Structured logging (JSON format) with log rotation
+- [ ] Prometheus metrics endpoint (optional)
+- [ ] Full test coverage: unit + integration + smoke tests
+- [ ] CI pipeline: `make test` runs all tests in < 3 minutes
+- [ ] Data lineage: every run logs data hash, config snapshot, Git commit SHA
+- [ ] `Makefile` with targets: `test`, `lint`, `format`, `daily`, `backtest`, `rebuild`, `paper-reset`
+- [ ] `systemd` service file for automated daily run
+- [ ] Runbook: how to add a new data source, how to add a new rule condition
+- [ ] **Deliverable:** Pipeline runs unattended on ShreeVault, self-monitors, alerts on failure.
 
 ---
 
