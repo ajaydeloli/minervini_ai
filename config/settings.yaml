@@ -12,6 +12,10 @@ data:
   fundamentals_dir: "data/fundamentals"
   news_dir: "data/news"
 
+chart:
+  output_dir: "data/charts"      # must match _CHART_DIR in dashboard/components/charts.py
+  lookback_days: 90              # number of trading-day candles to render
+
 watchlist:
   always_scan: true
   priority_in_reports: true

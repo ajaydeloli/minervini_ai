@@ -8,7 +8,7 @@ Design mandates (PROJECT_DESIGN.md §10.1–10.4):
   - All failures are caught and logged — the module NEVER raises to the caller.
   - Market-wide articles are fetched once (parallel RSS), cached for 30 min.
   - Per-symbol filtering uses alias matching (config/symbol_aliases.yaml).
-  - LLM re-scoring is a Phase 6 stub here; keyword scoring is always available.
+  - LLM re-scoring is optional and enabled via config; keyword scoring is always available.
   - Cache writes are atomic (write .tmp → os.replace to final path).
 
 Public API:
@@ -257,7 +257,7 @@ def _load_aliases(config: dict) -> dict[str, list[str]]:  # noqa: ARG001
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Private — LLM re-scorer (Phase 5 stub)
+# Private — LLM re-scorer
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _llm_rescore(
@@ -272,24 +272,16 @@ def _llm_rescore(
     "SEBI probe on a competitor" is neutral for the target symbol even
     though "sebi" and "probe" are bearish keywords.
 
-    Phase 5 status — STUB:
-        This function is intentionally a no-op in Phase 5.  It returns
-        the articles unchanged so the rest of the pipeline can be built
-        and tested against keyword-only scoring.
-
-    TODO Phase 6:
-        1. Import llm.llm_client and instantiate the configured provider
-           (Groq by default — free tier, fast enough for short article text).
-        2. For each article, build a short prompt:
-               "Is the following news article positive, negative, or neutral
-                for the stock symbol {symbol}?  Reply ONLY with a JSON object:
-                {\"sentiment\": <float from -1.0 to 1.0>, \"reason\": \"<one sentence>\"}
-                Article: {title}. {summary}"
-        3. Call client.complete(prompt, max_tokens=100).
-        4. Parse the JSON response; update article["sentiment"] and
-           article["score"] = article["sentiment"] * 100.
-        5. Catch all LLMError subclasses → log WARNING → leave original score.
-        6. Log token usage per article for cost monitoring.
+    Behaviour:
+        - Returns the articles list unchanged (no LLM call) when
+          ``config["llm"]["enabled"]`` is False or when the LLM client
+          is unavailable.
+        - For each article, builds a short prompt asking the model to rate
+          sentiment for *symbol* as a float from -1.0 to +1.0, then updates
+          ``article["sentiment"]`` and ``article["score"]`` in-place.
+        - On any per-article failure (LLMError, malformed JSON, missing key)
+          the original keyword-derived score is preserved and a WARNING is
+          logged.  The function never raises to its caller.
 
     Args:
         articles: List of article dicts (each with "score", "sentiment" keys).
@@ -297,8 +289,8 @@ def _llm_rescore(
         config:   Parsed settings.yaml dict.
 
     Returns:
-        The same articles list (modified in-place in Phase 6, returned as-is
-        in Phase 5).  Never raises.
+        The same articles list with LLM-updated scores where the call
+        succeeded, or unchanged scores where it did not.  Never raises.
     """
     llm_enabled = config.get("llm", {}).get("enabled", False)
     if not llm_enabled:
@@ -551,7 +543,8 @@ def fetch_symbol_news(
     Filter market-wide news for a specific symbol using alias matching.
 
     If all_news is not provided, fetch_market_news() is called first.
-    Optionally re-scores matched articles with an LLM (Phase 6 stub here).
+    Optionally re-scores matched articles with an LLM when
+    ``config["news"]["llm_rescore"]`` is True (requires ``config["llm"]["enabled"]``).
 
     Alias matching is case-insensitive substring search in
     title.lower() and summary.lower().  The alias list is loaded from

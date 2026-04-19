@@ -90,14 +90,14 @@ def render_score_gauge(
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TT_CONDITION_LABELS: dict[str, tuple[str, str]] = {
-    "condition_1": ("Price > SMA150 & SMA200",      "Close above both long-term MAs"),
-    "condition_2": ("SMA150 > SMA200",               "150-day MA above 200-day MA"),
-    "condition_3": ("SMA200 trending up (20d)",      "200-day MA rising for ≥ 20 days"),
-    "condition_4": ("SMA50 > SMA150 & SMA200",       "50-day MA above both longer MAs"),
-    "condition_5": ("Price > SMA50",                  "Close above the 50-day MA"),
-    "condition_6": ("Price ≥ 25% above 52w low",     "At least 25% off the 52-week low"),
-    "condition_7": ("Price within 25% of 52w high",  "Within 25% of the 52-week high"),
-    "condition_8": ("RS Rating ≥ 70",                "Relative strength rating ≥ 70"),
+    "C1": ("Price > SMA150 & SMA200",      "Close above both long-term MAs"),
+    "C2": ("SMA150 > SMA200",               "150-day MA above 200-day MA"),
+    "C3": ("SMA200 trending up (20d)",      "200-day MA rising for ≥ 20 days"),
+    "C4": ("SMA50 > SMA150 & SMA200",       "50-day MA above both longer MAs"),
+    "C5": ("Price > SMA50",                  "Close above the 50-day MA"),
+    "C6": ("Price ≥ 25% above 52w low",     "At least 25% off the 52-week low"),
+    "C7": ("Price within 25% of 52w high",  "Within 25% of the 52-week high"),
+    "C8": ("RS Rating ≥ 70",                "Relative strength rating ≥ 70"),
 }
 
 
@@ -134,7 +134,7 @@ def render_trend_template_checklist(
     )
     st.divider()
 
-    keys = [f"condition_{i}" for i in range(1, 9)]
+    keys = [f"C{i}" for i in range(1, 9)]
     left_keys = keys[:4]
     right_keys = keys[4:]
 

@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import base64
 import csv
+import dataclasses
+import json
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -490,21 +492,33 @@ def generate_report(
         {output_dir}/backtest_{label}_{date}.html
         {output_dir}/backtest_{label}_{date}.csv
         {output_dir}/equity_curve_{label}_{date}.png
+        {output_dir}/metrics_{label}_{date}.json
 
-    Returns: {"html": Path, "csv": Path, "chart": Path}
+    Returns: {"html": Path, "csv": Path, "chart": Path, "metrics": Path}
     """
     label   = run_label if run_label else "run"
     today   = date.today().isoformat()
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    csv_path   = out_dir / f"backtest_{label}_{today}.csv"
-    html_path  = out_dir / f"backtest_{label}_{today}.html"
-    chart_path = out_dir / f"equity_curve_{label}_{today}.png"
+    csv_path     = out_dir / f"backtest_{label}_{today}.csv"
+    html_path    = out_dir / f"backtest_{label}_{today}.html"
+    chart_path   = out_dir / f"equity_curve_{label}_{today}.png"
+    metrics_path = out_dir / f"metrics_{label}_{today}.json"
 
     _write_csv(result, csv_path)
     _generate_equity_chart(result, chart_path)
     html_path.write_text(_render_html(result, chart_path), encoding="utf-8")
+
+    # ── Serialize pre-computed metrics so the dashboard never has to
+    #    recompute them live from the CSV on every load.
+    try:
+        metrics_dict = dataclasses.asdict(result.metrics)
+    except TypeError:
+        # Fallback for non-dataclass BacktestMetrics implementations
+        metrics_dict = vars(result.metrics)
+    with metrics_path.open("w", encoding="utf-8") as _fh:
+        json.dump(metrics_dict, _fh, indent=2, default=str)
 
     log.info(
         "Backtest report generated",
@@ -512,6 +526,7 @@ def generate_report(
         html=str(html_path),
         csv=str(csv_path),
         chart=str(chart_path),
+        metrics=str(metrics_path),
         trades=len(result.trades),
     )
-    return {"html": html_path, "csv": csv_path, "chart": chart_path}
+    return {"html": html_path, "csv": csv_path, "chart": chart_path, "metrics": metrics_path}

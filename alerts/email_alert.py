@@ -51,6 +51,7 @@ from typing import Union
 
 from alerts.base import AlertResult, BaseAlert
 from rules.scorer import SEPAResult
+from storage.sqlite_store import get_watchlist_symbols
 from utils.exceptions import EmailAlertError
 from utils.logger import get_logger
 
@@ -258,11 +259,9 @@ class EmailAlert(BaseAlert):
             log.warning("EmailAlert: skipping unparseable result dict", error=str(exc))
             return None
 
-    def _watchlist_symbols(self, config: dict) -> set[str]:
-        wl = config.get("watchlist_symbols") or config.get("watchlist", {}).get("symbols")
-        if isinstance(wl, (list, set, tuple)):
-            return {str(s).upper() for s in wl}
-        return set()
+    def _watchlist_symbols(self, config: dict) -> set[str]:  # noqa: ARG002
+        """Return watchlist symbols from SQLite. config is unused (kept for call-site compat)."""
+        return set(get_watchlist_symbols())
 
     def _build_message(
         self,

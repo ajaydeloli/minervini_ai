@@ -15,7 +15,8 @@ Design mandates (PROJECT_DESIGN.md §4.3, §19.2)
       setup_quality="FAIL" regardless of any other condition.
     • The composite score is fully configurable via config["scoring"]["weights"].
     • All component scores are normalised to 0–100 before weighting.
-    • fundamental_score and news_score are placeholder zeros (Phase 5 wires them).
+    • fundamental_score and news_score are fully wired; both default to 0.0
+      when their upstream results are not provided (backward-compatible callers).
     • to_dict() produces a flat JSON-serialisable dict for storage / API use.
 
 Scoring weights (settings.yaml → config["scoring"]["weights"])
@@ -123,9 +124,10 @@ class SEPAResult:
     """
     Structured output of one full SEPA evaluation pass for a single symbol.
 
-    Fields are documented in PROJECT_DESIGN.md §4.3.  Phase-5 placeholders
-    (fundamental_pass, fundamental_details, news_score) default to their
-    neutral values so that Phase 3 callers do not need to supply them.
+    Fields are documented in PROJECT_DESIGN.md §4.3.  fundamental_pass,
+    fundamental_details, and news_score default to their neutral values so
+    that callers that do not supply upstream fundamental / news results remain
+    backward-compatible.
     """
 
     # ── Identity ──────────────────────────────────────────────────────────────
@@ -163,10 +165,13 @@ class SEPAResult:
     reward_pct:    Optional[float] = None   # (target − entry) / entry × 100
     has_resistance: Optional[bool] = None   # True when a real pivot / 52w was used
 
-    # ── Phase-5 placeholders (wired in Phase 5) ───────────────────────────────
+    # ── Fundamental & news (default to neutral; callers may omit) ───────────────
     fundamental_pass: bool = False
     fundamental_details: dict = field(default_factory=dict)
     news_score: Optional[float] = None
+
+    # ── LLM narrative (generated in Step 5b, persisted to DB) ─────────────────
+    narrative: Optional[str] = None
 
     # ── Final output ──────────────────────────────────────────────────────────
     setup_quality: Literal["A+", "A", "B", "C", "FAIL"] = "FAIL"
@@ -543,6 +548,7 @@ def to_dict(result: SEPAResult) -> dict:
         "fundamental_pass":        result.fundamental_pass,
         "fundamental_details":     result.fundamental_details,
         "news_score":              result.news_score,
+        "narrative":               result.narrative,
         "setup_quality":           result.setup_quality,
         "score":                   result.score,
     }

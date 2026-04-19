@@ -113,6 +113,90 @@ def _build_context(config: dict, db_path: str | Path, scope: str = "all") -> Run
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Market-open job (called by APScheduler — must never raise)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _market_open_job(config: dict, db_path: str | Path) -> None:
+    """
+    Execute all pending paper-trade orders at market open.
+
+    Registered as a Mon–Fri cron job at 09:20 IST (5 min after open so that
+    yfinance has a real open price to report for most symbols).  The time is
+    configurable via config['scheduler']['market_open_time'] (default '09:20').
+
+    Steps
+    ─────
+    1. Skip if paper_trading.enabled is False.
+    2. Prune orders whose expires_at < today (cancel_expired_orders).
+    3. Fetch pending orders; bail early if there are none.
+    4. Fetch fill prices via fetch_fill_prices() for all pending symbols.
+    5. Call execute_pending_orders() with those prices.
+
+    Swallows ALL exceptions so the scheduler keeps running even if today's
+    market-open fill fails.
+    """
+    if not config.get("paper_trading", {}).get("enabled", False):
+        log.debug("Market-open job: paper trading disabled — skipping")
+        return
+
+    log.info("Market-open job triggered", run_date=str(today_ist()))
+    try:
+        from paper_trading.order_queue import (
+            cancel_expired_orders,
+            execute_pending_orders,
+            fetch_fill_prices,
+            get_pending_orders,
+        )
+
+        db = Path(db_path)
+
+        # Step 1: prune stale orders
+        cancelled = cancel_expired_orders(db)
+        if cancelled:
+            log.info(
+                "Market-open job: expired orders cancelled", count=cancelled
+            )
+
+        # Step 2: nothing to do?
+        pending = get_pending_orders(db)
+        if not pending:
+            log.info("Market-open job: no pending orders — done")
+            return
+
+        symbols = [o.symbol for o in pending]
+        log.info(
+            "Market-open job: pending orders found",
+            count=len(symbols),
+            symbols=symbols,
+        )
+
+        # Step 3: fetch fill prices (today open or prev-session close)
+        current_prices = fetch_fill_prices(symbols, config)
+        if not current_prices:
+            log.warning(
+                "Market-open job: no prices could be fetched — aborting fill",
+                symbols=symbols,
+            )
+            return
+
+        # Step 4: fill orders
+        filled = execute_pending_orders(db, current_prices, config)
+        log.info(
+            "Market-open job: complete",
+            filled=len(filled),
+            prices_fetched=len(current_prices),
+        )
+
+    except Exception as exc:  # noqa: BLE001
+        log.critical(
+            "Market-open job raised an unhandled exception"
+            " — scheduler will retry tomorrow",
+            reason=str(exc),
+            exc_info=True,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Daily job (called by APScheduler — must never raise)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -343,6 +427,25 @@ def start_scheduler(
         misfire_grace_time=3600,
     )
 
+    # -- Job 4: Market-open order execution (Mon–Fri, configurable, default 09:20) --
+    open_time_str: str = sched_cfg.get("market_open_time", "09:20")
+    open_hour, open_minute = _parse_run_time(open_time_str)
+    scheduler.add_job(
+        func=_market_open_job,
+        trigger=CronTrigger(
+            day_of_week="mon-fri",
+            hour=open_hour,
+            minute=open_minute,
+            timezone=tz,
+        ),
+        args=[config, db_path],
+        id="market_open_orders",
+        name="Minervini market-open pending-order execution",
+        replace_existing=True,
+        max_instances=1,        # never overlap with itself
+        misfire_grace_time=300, # fire up to 5 min late if process was busy
+    )
+
     scheduler.start()
 
     # ── Determine next run times for the startup log ──────────────────────────
@@ -352,12 +455,14 @@ def start_scheduler(
 
     weekend_auto_run: bool = config.get("backtest", {}).get("weekend_auto_run", False)
     log.info(
-        "Scheduler started — three jobs registered",
+        "Scheduler started — four jobs registered",
         daily_pipeline_next=_next("daily_pipeline"),
+        market_open_orders_next=_next("market_open_orders"),
         monthly_bootstrap_next=_next("monthly_bootstrap"),
         weekend_backtest_next=_next("weekend_backtest"),
         weekend_backtest_enabled=weekend_auto_run,
         run_time=run_time_str,
+        market_open_time=open_time_str,
         timezone=tz_name,
     )
 

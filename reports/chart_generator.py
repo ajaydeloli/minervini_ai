@@ -31,7 +31,7 @@ Usage example
         run_date=datetime.date.today(),
         result=result,
         config=config,
-        output_dir="reports/charts",
+        output_dir="data/charts",
     )
     if path:
         print(f"Chart saved → {path}")
@@ -97,11 +97,18 @@ def _get_attr(result: object, key: str, default=None):
 
 
 def _resolve_output_dir(config: dict, output_dir: str) -> Path:
-    """Merge config['chart']['output_dir'] with the caller's argument."""
+    """Merge config['chart']['output_dir'] with the caller's argument.
+
+    Priority (highest → lowest):
+      1. Explicit caller override  — any value other than the default ``"data/charts"``
+      2. ``config["chart"]["output_dir"]``
+      3. Hard-coded default        — ``"data/charts"``
+    """
+    _DEFAULT = "data/charts"
     chart_cfg = config.get("chart", {})
-    cfg_dir = chart_cfg.get("output_dir", output_dir)
-    # The caller argument takes precedence when it differs from the default.
-    resolved = Path(output_dir if output_dir != "reports/charts" else cfg_dir)
+    cfg_dir = chart_cfg.get("output_dir", _DEFAULT)
+    # Caller wins only when they explicitly passed a non-default directory.
+    resolved = Path(output_dir if output_dir != _DEFAULT else cfg_dir)
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
 
@@ -120,7 +127,7 @@ def generate_chart(
     run_date: datetime.date,
     result: Union[object, dict],
     config: dict,
-    output_dir: str = "reports/charts",
+    output_dir: str = "data/charts",
 ) -> "Path | None":
     """
     Generate a candlestick chart with MA ribbon, VCP markup, and stage

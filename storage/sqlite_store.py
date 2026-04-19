@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS screener_results (
     rs_rating             INTEGER,
     news_score            REAL,
     in_watchlist          INTEGER  DEFAULT 0,
+    narrative             TEXT,     -- LLM trade brief (NULL when LLM disabled)
     result_json           TEXT,     -- full SEPAResult as JSON blob
     created_at            TEXT     NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now')),
     UNIQUE(symbol, run_date)
@@ -201,16 +202,32 @@ def create_tables(conn: sqlite3.Connection | None = None) -> None:
     Create all tables and indexes if they do not exist.
     Safe to call multiple times (idempotent).
 
+    Also applies lightweight schema migrations for columns added after the
+    initial release (ALTER TABLE … ADD COLUMN is a no-op if the column
+    already exists, so this is safe to run on every startup).
+
     Args:
         conn: An open connection to use (useful in tests).  If None,
               opens and closes its own connection.
     """
+    _MIGRATIONS = [
+        # (table, column, definition)  — added after initial schema release
+        ("screener_results", "narrative", "TEXT"),
+    ]
+
+    def _apply(c: sqlite3.Connection) -> None:
+        c.executescript(_SCHEMA_SQL)
+        for table, column, defn in _MIGRATIONS:
+            existing = {row[1] for row in c.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {defn}")
+
     if conn is not None:
-        conn.executescript(_SCHEMA_SQL)
+        _apply(conn)
         return
 
     with _connect() as c:
-        c.executescript(_SCHEMA_SQL)
+        _apply(c)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -626,7 +643,7 @@ def save_results(
                         fundamental_pass, vcp_qualified,
                         breakout_triggered, entry_price, stop_loss,
                         risk_pct, rs_rating, news_score,
-                        in_watchlist, result_json
+                        in_watchlist, narrative, result_json
                     ) VALUES (
                         ?,?,?,?,
                         ?,?,?,
@@ -634,7 +651,7 @@ def save_results(
                         ?,?,
                         ?,?,?,
                         ?,?,?,
-                        ?,?
+                        ?,?,?
                     )
                     ON CONFLICT(symbol, run_date) DO UPDATE SET
                         score              = excluded.score,
@@ -653,6 +670,7 @@ def save_results(
                         rs_rating          = excluded.rs_rating,
                         news_score         = excluded.news_score,
                         in_watchlist       = excluded.in_watchlist,
+                        narrative          = excluded.narrative,
                         result_json        = excluded.result_json
                     """,
                     (
@@ -674,6 +692,7 @@ def save_results(
                         r.get("rs_rating"),
                         r.get("news_score"),
                         int(sym in wl),
+                        r.get("narrative"),
                         json.dumps(r, default=str),
                     ),
                 )

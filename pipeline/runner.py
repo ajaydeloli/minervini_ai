@@ -179,6 +179,7 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
 
     Steps
     ─────
+    0.  execute_pending_orders() — fill queued paper orders if market is open
     1.  setup_logging()
     2.  resolve_symbols(scope) → RunSymbols
     3.  init_db + log_run()    → run_id
@@ -198,6 +199,71 @@ def run(context: RunContext) -> RunResult:  # noqa: C901
     status     = "success"
     error_msg: str | None = None
     run_id: Optional[int] = None
+
+    # ── Step 0: Execute pending paper-trade orders (market-open / run_now path) ──
+    # The scheduler fires _market_open_job at 09:20 IST every weekday.
+    # This step is a safety-net for run_now() calls made during market hours:
+    # orders queued by the previous evening's run are filled before new screening
+    # results are processed, keeping the portfolio in a consistent state.
+    if (
+        not context.dry_run
+        and context.config.get("paper_trading", {}).get("enabled", False)
+    ):
+        _t0 = time.monotonic()
+        log.info("Step 0: execute_pending_orders — start")
+        try:
+            from paper_trading.order_queue import (
+                cancel_expired_orders,
+                execute_pending_orders,
+                fetch_fill_prices,
+                get_pending_orders,
+                is_market_open,
+            )
+
+            if is_market_open():
+                cancel_expired_orders(context.db_path)
+                _pending = get_pending_orders(context.db_path)
+                if _pending:
+                    _symbols = [o.symbol for o in _pending]
+                    _prices  = fetch_fill_prices(_symbols, context.config)
+                    if _prices:
+                        _filled = execute_pending_orders(
+                            context.db_path, _prices, context.config
+                        )
+                        log.info(
+                            "Step 0: execute_pending_orders — done",
+                            filled=len(_filled),
+                            duration_sec=_elapsed(_t0),
+                        )
+                    else:
+                        log.warning(
+                            "Step 0: execute_pending_orders — no prices fetched;"
+                            " orders remain queued",
+                            pending=len(_pending),
+                            duration_sec=_elapsed(_t0),
+                        )
+                else:
+                    log.info(
+                        "Step 0: execute_pending_orders — no pending orders",
+                        duration_sec=_elapsed(_t0),
+                    )
+            else:
+                log.info(
+                    "Step 0: execute_pending_orders — skipped (market closed)",
+                    duration_sec=_elapsed(_t0),
+                )
+        except Exception as exc:
+            log.warning(
+                "Step 0: execute_pending_orders failed — continuing",
+                reason=str(exc),
+                exc_info=True,
+            )
+            log.info(
+                "Step 0: execute_pending_orders — done (error)",
+                duration_sec=_elapsed(_t0),
+            )
+    else:
+        log.info("Step 0: execute_pending_orders — skipped (dry_run or disabled)")
 
     # ── Step 1: Logging setup ─────────────────────────────────────────────────
     t0 = time.monotonic()

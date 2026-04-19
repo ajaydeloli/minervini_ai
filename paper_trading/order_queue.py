@@ -432,6 +432,107 @@ def cancel_expired_orders(db_path: Path) -> int:
     return count
 
 
+def fetch_fill_prices(symbols: list[str], config: dict) -> dict[str, float]:
+    """
+    Fetch the best available fill prices for a list of NSE symbols.
+
+    Called by the market-open scheduler job and by runner.py Step 0 when
+    the pipeline is invoked while the market is open.
+
+    Strategy (per symbol):
+      1. Download the last 7 calendar days via YFinanceSource.
+      2. If the most-recent row is from today and open > 0  →  use today's open.
+      3. Otherwise                                          →  use the previous
+         session's close price (best proxy for next-open fill in paper trading).
+
+    Symbols that fail to fetch are logged as warnings and omitted from the
+    returned dict — execute_pending_orders() already handles missing symbols
+    gracefully.
+
+    Args:
+        symbols: List of NSE symbols whose pending orders need a fill price.
+        config:  Full application config dict (used to locate universe_yaml).
+
+    Returns:
+        dict[symbol → fill price]  (may be empty if all fetches fail).
+    """
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    prices: dict[str, float] = {}
+    if not symbols:
+        return prices
+
+    try:
+        from ingestion.yfinance_source import YFinanceSource
+    except ImportError as exc:
+        log.error(
+            "fetch_fill_prices: cannot import YFinanceSource",
+            error=str(exc),
+        )
+        return prices
+
+    universe_yaml = config.get("universe_yaml_path", "config/universe.yaml")
+    try:
+        src = YFinanceSource(universe_yaml=universe_yaml)
+    except Exception as exc:
+        log.warning("fetch_fill_prices: YFinanceSource init failed", error=str(exc))
+        return prices
+
+    _ist = ZoneInfo("Asia/Kolkata")
+    today = datetime.now(tz=_ist).date()
+    lookback_start = today - timedelta(days=7)
+
+    for symbol in symbols:
+        try:
+            df = src.fetch(symbol, start=lookback_start, end=today)
+            if df.empty:
+                log.warning("fetch_fill_prices: empty data", symbol=symbol)
+                continue
+
+            latest_row  = df.iloc[-1]
+            latest_date = df.index[-1]
+            if hasattr(latest_date, "date"):
+                latest_date = latest_date.date()
+
+            open_price  = float(latest_row.get("open",  0))
+            close_price = float(latest_row.get("close", 0))
+
+            if latest_date == today and open_price > 0:
+                prices[symbol] = open_price
+                log.debug(
+                    "fetch_fill_prices: today open",
+                    symbol=symbol,
+                    price=open_price,
+                )
+            elif close_price > 0:
+                prices[symbol] = close_price
+                log.debug(
+                    "fetch_fill_prices: prev-session close",
+                    symbol=symbol,
+                    price=close_price,
+                    data_date=str(latest_date),
+                )
+            else:
+                log.warning(
+                    "fetch_fill_prices: both open and close are zero — skipping",
+                    symbol=symbol,
+                )
+        except Exception as exc:
+            log.warning(
+                "fetch_fill_prices: fetch failed",
+                symbol=symbol,
+                error=str(exc),
+            )
+
+    log.info(
+        "fetch_fill_prices: complete",
+        requested=len(symbols),
+        fetched=len(prices),
+    )
+    return prices
+
+
 def cancel_order(db_path: Path, symbol: str) -> bool:
     """
     Delete the pending order for *symbol*.
