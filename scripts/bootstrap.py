@@ -14,15 +14,17 @@ Usage examples
   # Bootstrap the full universe from universe.yaml (default)
   python scripts/bootstrap.py
 
-  # Explicit equivalent of the default — "config" and "list" are identical
+  # Equivalent explicit form — reads config/universe.yaml
   python scripts/bootstrap.py --universe config
-  python scripts/bootstrap.py --universe list
 
   # Bootstrap the full Nifty 500 placeholder universe
   python scripts/bootstrap.py --universe nifty500
 
   # Bootstrap only the SQLite watchlist
   python scripts/bootstrap.py --watchlist-only
+
+  # Load an external watchlist file, persist to SQLite, then bootstrap
+  python scripts/bootstrap.py --watchlist /path/to/my_stocks.csv
 
   # Bootstrap specific inline symbols
   python scripts/bootstrap.py --symbols "RELIANCE,TCS,INFY"
@@ -104,13 +106,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--universe",
-        choices=["nifty500", "config", "list", "all"],
-        default="list",
+        choices=["nifty500", "config", "all"],
+        default="config",
         help=(
-            'Universe source: "config" or "list" (default — both read config/universe.yaml), '
+            'Universe source: "config" (default — reads config/universe.yaml), '
             '"nifty500" (Nifty 500 placeholder), '
-            '"all" (universe + watchlist combined). '
-            '"config" and "list" are identical; either form is accepted.'
+            '"all" (universe + watchlist combined).'
         ),
     )
     parser.add_argument(
@@ -121,6 +122,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Comma-separated inline symbols (e.g. \"RELIANCE,TCS\"). "
             "When provided, overrides all other symbol sources."
+        ),
+    )
+    parser.add_argument(
+        "--watchlist",
+        dest="watchlist_path",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Path to a watchlist file (.csv / .json / .xlsx / .txt). "
+            "Parsed and persisted to SQLite before symbol resolution."
         ),
     )
     parser.add_argument(
@@ -413,9 +424,9 @@ def main() -> None:
     Flow:
         0.  Resolve run_date from --date (ISO string or "today").
         1.  Parse CLI arguments.
-        2.  Resolve the symbol list (--symbols overrides; --watchlist-only
-            limits scope; --universe controls universe source).
-            "config" and "list" are both treated as scope="universe".
+        2.  Resolve the symbol list (--symbols overrides; --watchlist loads an
+            external file and persists it to SQLite; --watchlist-only limits
+            scope; --universe controls universe source).
         3.  Compute start_date = run_date - relativedelta(years=args.years).
         4.  Validate the output directory is reachable (fatal on failure).
         5.  Print pre-run summary table.
@@ -467,6 +478,12 @@ def main() -> None:
         cli_symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
         log.debug("CLI symbols parsed", count=len(cli_symbols), symbols=cli_symbols)
 
+    # ── Step 1b: Resolve watchlist file path ──────────────────────────────────
+    cli_watchlist_file: Path | None = None
+    if args.watchlist_path:
+        cli_watchlist_file = Path(args.watchlist_path)
+        log.debug("External watchlist file supplied", path=str(cli_watchlist_file))
+
     # ── Step 2: Determine scope ───────────────────────────────────────────────
     # Priority: --symbols > --watchlist-only > --universe
     if cli_symbols:
@@ -477,7 +494,7 @@ def main() -> None:
     elif args.universe == "all":
         scope = "all"
     else:
-        # "config", "list", and "nifty500" all resolve via universe.yaml
+        # "config" and "nifty500" both resolve via universe.yaml
         scope = "universe"
 
     # ── Step 3: Resolve symbols ───────────────────────────────────────────────
@@ -489,7 +506,7 @@ def main() -> None:
     try:
         run_symbols: RunSymbols = resolve_symbols(
             config_path="config/universe.yaml",
-            cli_watchlist_file=None,
+            cli_watchlist_file=cli_watchlist_file,
             cli_symbols=cli_symbols,
             scope=scope,  # type: ignore[arg-type]
             universe_mode=universe_mode_override,
