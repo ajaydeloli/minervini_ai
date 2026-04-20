@@ -7,28 +7,25 @@ Wants=network.target
 [Service]
 Type=simple
 
-User=ubuntu
-Group=ubuntu
+User=@@DEPLOY_USER@@
+Group=@@DEPLOY_USER@@
 
-WorkingDirectory=/home/ubuntu/projects/minervini_ai
-EnvironmentFile=/home/ubuntu/projects/minervini_ai/.env
+WorkingDirectory=@@PROJECT_DIR@@
+EnvironmentFile=@@PROJECT_DIR@@/.env
 
-ExecStart=/home/ubuntu/projects/minervini_ai/.venv/bin/uvicorn \
+ExecStart=@@PROJECT_DIR@@/.venv/bin/uvicorn \
     api.main:app \
     --host 0.0.0.0 \
     --port 8000 \
     --workers 2
 
-# Restart policy
 Restart=always
 RestartSec=5
 
-# Keep stdout/stderr in the journal
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=minervini-api
 
-# Graceful shutdown timeout
 TimeoutStopSec=30
 
 [Install]

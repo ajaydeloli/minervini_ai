@@ -7,22 +7,20 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 
-User=ubuntu
-Group=ubuntu
+User=@@DEPLOY_USER@@
+Group=@@DEPLOY_USER@@
 
-WorkingDirectory=/home/ubuntu/projects/minervini_ai
-EnvironmentFile=/home/ubuntu/projects/minervini_ai/.env
+WorkingDirectory=@@PROJECT_DIR@@
+EnvironmentFile=@@PROJECT_DIR@@/.env
 
-ExecStart=/home/ubuntu/projects/minervini_ai/.venv/bin/python \
-    /home/ubuntu/projects/minervini_ai/scripts/run_daily.py \
+ExecStart=@@PROJECT_DIR@@/.venv/bin/python \
+    @@PROJECT_DIR@@/scripts/run_daily.py \
     --date today
 
-# Keep stdout/stderr in the journal
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=minervini-daily
 
-# Give the run up to 30 minutes before systemd kills it
 TimeoutStartSec=1800
 
 [Install]

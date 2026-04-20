@@ -1,24 +1,36 @@
 #!/usr/bin/env bash
 # deploy/install.sh
 # ─────────────────────────────────────────────────────────────────────────────
-# Install Minervini AI systemd units on ShreeVault.
-# Idempotent — safe to run more than once (symlinks are force-created).
+# Install Minervini AI systemd units — portable across any machine / username.
+# Idempotent — safe to run more than once.
 #
 # Usage:
 #   sudo bash deploy/install.sh
 #
 # What it does:
-#   1. Symlinks all .service and .timer files → /etc/systemd/system/
-#   2. Reloads the systemd daemon
-#   3. Enables and starts the timer + long-running services
-#   4. Prints a status summary
+#   1. Auto-detects PROJECT_DIR from this script's location (no hardcoding)
+#   2. Auto-detects the invoking user (via $SUDO_USER)
+#   3. Writes patched .service/.timer files → /etc/systemd/system/
+#      (replaces @@PROJECT_DIR@@ and @@DEPLOY_USER@@ placeholders)
+#   4. Reloads the systemd daemon
+#   5. Enables and starts the timer + long-running services
+#   6. Prints a status summary
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-PROJECT_DIR="/home/ubuntu/projects/minervini_ai"
-DEPLOY_DIR="${PROJECT_DIR}/deploy"
+# ── Auto-detect paths — works on any machine, any username ───────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DEPLOY_DIR="${SCRIPT_DIR}"
 SYSTEMD_DIR="/etc/systemd/system"
+
+# Detect the real (non-root) user who invoked sudo
+DEPLOY_USER="${SUDO_USER:-}"
+if [[ -z "${DEPLOY_USER}" ]]; then
+    echo "ERROR: Could not detect the invoking user." >&2
+    echo "       Please run as: sudo bash deploy/install.sh" >&2
+    exit 1
+fi
 
 UNITS=(
     "minervini-daily.service"
@@ -47,24 +59,31 @@ fi
 echo "────────────────────────────────────────────────────────────"
 echo " Minervini AI — systemd install"
 echo " Project : ${PROJECT_DIR}"
+echo " User    : ${DEPLOY_USER}"
 echo " Units   : ${SYSTEMD_DIR}"
 echo "────────────────────────────────────────────────────────────"
 
-# ── Step 1: Symlink unit files ────────────────────────────────────────────────
+# ── Step 1: Write patched unit files ─────────────────────────────────────────
 echo ""
-echo "[1/4] Symlinking unit files …"
+echo "[1/4] Writing patched unit files …"
 for unit in "${UNITS[@]}"; do
     src="${DEPLOY_DIR}/${unit}"
     dst="${SYSTEMD_DIR}/${unit}"
 
     if [[ ! -f "${src}" ]]; then
-        echo "  WARNING: Source file not found, skipping: ${src}"
+        echo "  WARNING: Template not found, skipping: ${src}"
         continue
     fi
 
-    # Force-create symlink (idempotent)
-    ln -sf "${src}" "${dst}"
-    echo "  ✓  ${dst} → ${src}"
+    # Substitute placeholders with real values detected at deploy time
+    sed \
+        -e "s|@@PROJECT_DIR@@|${PROJECT_DIR}|g" \
+        -e "s|@@DEPLOY_USER@@|${DEPLOY_USER}|g" \
+        "${src}" > "${dst}"
+
+    echo "  ✓  ${dst}"
+    echo "       PROJECT_DIR → ${PROJECT_DIR}"
+    echo "       DEPLOY_USER → ${DEPLOY_USER}"
 done
 
 # ── Step 2: Reload daemon ─────────────────────────────────────────────────────
@@ -77,15 +96,12 @@ echo "  ✓  daemon-reload OK"
 echo ""
 echo "[3/4] Enabling and starting units …"
 
-# Daily timer (runs the one-shot service on schedule)
 systemctl enable --now minervini-daily.timer
 echo "  ✓  minervini-daily.timer enabled + started"
 
-# API service
 systemctl enable --now minervini-api.service
 echo "  ✓  minervini-api.service enabled + started"
 
-# Dashboard service
 systemctl enable --now minervini-dashboard.service
 echo "  ✓  minervini-dashboard.service enabled + started"
 
