@@ -200,49 +200,83 @@ export async function fetchWatchlist(): Promise<WatchlistItem[]> {
   return apiFetch<WatchlistItem[]>("/api/v1/watchlist");
 }
 
-/** POST /api/v1/watchlist/{symbol} */
+/**
+ * POST /api/v1/watchlist/{symbol}
+ * Proxied through /api/proxy/watchlist/[symbol] so the admin key is never
+ * sent from the browser (the proxy injects API_ADMIN_KEY server-side).
+ */
 export async function addToWatchlist(
   symbol: string,
   note?: string
 ): Promise<WatchlistItem[]> {
-  return apiFetch<WatchlistItem[]>(
-    `/api/v1/watchlist/${encodeURIComponent(symbol)}`,
+  const res = await fetch(
+    `/api/proxy/watchlist/${encodeURIComponent(symbol)}`,
     {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note: note ?? null }),
     }
   );
+  if (!res.ok) {
+    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText}`);
+  }
+  const envelope = (await res.json()) as APIResponse<WatchlistItem[]>;
+  if (!envelope.success) {
+    throw new ApiError(res.status, envelope.error ?? "Unknown API error");
+  }
+  return envelope.data;
 }
 
-/** DELETE /api/v1/watchlist/{symbol} */
+/**
+ * DELETE /api/v1/watchlist/{symbol}
+ * Proxied through /api/proxy/watchlist/[symbol] — admin key injected server-side.
+ */
 export async function removeFromWatchlist(symbol: string): Promise<void> {
-  await apiFetch<null>(
-    `/api/v1/watchlist/${encodeURIComponent(symbol)}`,
+  const res = await fetch(
+    `/api/proxy/watchlist/${encodeURIComponent(symbol)}`,
     { method: "DELETE" }
   );
+  if (!res.ok) {
+    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText}`);
+  }
 }
 
-/** POST /api/v1/watchlist/bulk */
+/**
+ * POST /api/v1/watchlist/bulk
+ * Proxied through /api/proxy/watchlist/bulk — admin key injected server-side.
+ */
 export async function bulkAddWatchlist(
   symbols: string[]
 ): Promise<BulkAddResult> {
-  return apiFetch<BulkAddResult>("/api/v1/watchlist/bulk", {
+  const res = await fetch("/api/proxy/watchlist/bulk", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ symbols }),
   });
+  if (!res.ok) {
+    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText}`);
+  }
+  const envelope = (await res.json()) as APIResponse<BulkAddResult>;
+  if (!envelope.success) {
+    throw new ApiError(res.status, envelope.error ?? "Unknown API error");
+  }
+  return envelope.data;
 }
 
-/** POST /api/v1/watchlist/upload — multipart form upload */
+/**
+ * POST /api/v1/watchlist/upload — multipart form upload
+ * Proxied through /api/proxy/watchlist/upload — admin key injected server-side.
+ * Note: no Content-Type header — the browser sets it automatically with the
+ * multipart boundary when body is a FormData instance.
+ */
 export async function uploadWatchlistFile(
   file: File
 ): Promise<WatchlistUploadResult> {
   const form = new FormData();
   form.append("file", file);
 
-  const url = `${BASE_URL}/api/v1/watchlist/upload`;
-  const res = await fetch(url, {
+  const res = await fetch("/api/proxy/watchlist/upload", {
     method: "POST",
-    headers: { "X-API-Key": READ_KEY },
     body: form,
   });
 

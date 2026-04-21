@@ -194,6 +194,12 @@ def compute(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     # with most charting platforms and requires no warmup guard.
     out["EMA_21"] = close.ewm(span=21, adjust=False, min_periods=21).mean()
 
+    # ── 52-week high / low (rolling 252 trading days) ─────────────────────────
+    # Required by rules/trend_template.py (C6, C7) and rules/risk_reward.py.
+    # 252 = standard number of trading days in a year.
+    out["high_52w"] = out["high"].rolling(window=252, min_periods=50).max()
+    out["low_52w"]  = out["low"].rolling(window=252, min_periods=50).min()
+
     # ── MA Slopes (linear regression, expressed as % per day) ─────────────────
     # We compute a single scalar for the LAST row only — this is all the rule
     # engine needs (it evaluates the most recent row of the feature store).

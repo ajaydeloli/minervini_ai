@@ -213,8 +213,9 @@ def _row_to_detail(row: dict[str, Any]) -> StockDetail:
 @limiter.limit(READ_LIMIT)
 def get_top_stocks(
     request: Request,
-    quality: str | None = Query(
+    min_quality: str | None = Query(
         default=None,
+        alias="min_quality",
         description="Exact setup_quality filter: A+, A, B, C, or FAIL. "
                     "Omit to include all grades.",
     ),
@@ -231,11 +232,11 @@ def get_top_stocks(
     _key: str = Depends(require_read_key),
 ) -> APIResponse[list[StockSummary]]:
     run_date = date or _today()
-    log.debug("GET /stocks/top", date=run_date, quality=quality, limit=limit)
+    log.debug("GET /stocks/top", date=run_date, quality=min_quality, limit=limit)
     try:
         rows = get_results_for_date(run_date, order_by="score DESC")
-        if quality:
-            rows = [r for r in rows if r.get("setup_quality") == quality]
+        if min_quality:
+            rows = [r for r in rows if r.get("setup_quality") == min_quality]
         rows = rows[:limit]
         results = [_row_to_summary(r) for r in rows]
         meta = {
