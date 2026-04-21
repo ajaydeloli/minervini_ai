@@ -1,0 +1,29 @@
+[Unit]
+Description=Minervini AI — Next.js Frontend
+Documentation=https://github.com/youruser/minervini_ai
+After=network.target minervini-api.service
+Wants=network.target
+
+[Service]
+Type=simple
+
+User=@@DEPLOY_USER@@
+Group=@@DEPLOY_USER@@
+
+WorkingDirectory=@@PROJECT_DIR@@/frontend
+EnvironmentFile=@@PROJECT_DIR@@/.env
+
+ExecStart=@@PROJECT_DIR@@/frontend/node_modules/.bin/next start \
+    --port 3000
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=minervini-frontend
+
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

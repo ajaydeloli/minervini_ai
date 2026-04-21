@@ -493,6 +493,12 @@ def main() -> None:
         log.debug("--watchlist-only set; forcing scope=watchlist")
     elif args.universe == "all":
         scope = "all"
+    elif args.watchlist_path:
+        # A watchlist file was supplied — bootstrap only those file symbols.
+        # The universe (universe.yaml) is intentionally excluded so the user
+        # gets history for exactly what they uploaded, nothing more.
+        scope = "watchlist"
+        log.debug("--watchlist file supplied; forcing scope=watchlist")
     else:
         # "config" and "nifty500" both resolve via universe.yaml
         scope = "universe"

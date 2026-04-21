@@ -37,6 +37,7 @@ UNITS=(
     "minervini-daily.timer"
     "minervini-api.service"
     "minervini-dashboard.service"
+    "minervini-frontend.service"
 )
 
 # ── Preflight checks ──────────────────────────────────────────────────────────
@@ -105,12 +106,15 @@ echo "  ✓  minervini-api.service enabled + started"
 systemctl enable --now minervini-dashboard.service
 echo "  ✓  minervini-dashboard.service enabled + started"
 
+systemctl enable --now minervini-frontend.service
+echo "  ✓  minervini-frontend.service enabled + started"
+
 # ── Step 4: Status summary ────────────────────────────────────────────────────
 echo ""
 echo "[4/4] Status summary …"
 echo ""
 
-for unit in minervini-daily.timer minervini-api.service minervini-dashboard.service; do
+for unit in minervini-daily.timer minervini-api.service minervini-dashboard.service minervini-frontend.service; do
     echo "── ${unit} ──"
     systemctl status "${unit}" --no-pager --lines=3 || true
     echo ""
@@ -123,5 +127,6 @@ echo " Useful commands:"
 echo "   journalctl -u minervini-daily -n 50 -f"
 echo "   journalctl -u minervini-api -n 50 -f"
 echo "   journalctl -u minervini-dashboard -n 50 -f"
+echo "   journalctl -u minervini-frontend -n 50 -f"
 echo "   systemctl list-timers --all | grep minervini"
 echo "────────────────────────────────────────────────────────────"
