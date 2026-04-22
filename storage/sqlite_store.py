@@ -213,6 +213,9 @@ def create_tables(conn: sqlite3.Connection | None = None) -> None:
     _MIGRATIONS = [
         # (table, column, definition)  — added after initial schema release
         ("screener_results", "narrative", "TEXT"),
+        # Phase 8: store the metrics JSON path produced by generate_report()
+        # so the API can resolve the exact file without guessing from run_id.
+        ("run_history", "report_path", "TEXT"),
     ]
 
     def _apply(c: sqlite3.Connection) -> None:
@@ -595,6 +598,49 @@ def get_run_history(
                 (limit,),
             ).fetchall()
     return _rows_to_dicts(rows)
+
+
+def get_run_by_id(run_id: int) -> dict[str, Any] | None:
+    """
+    Return a single run_history row by its primary key, or None if not found.
+
+    Args:
+        run_id: The integer id assigned by log_run().
+
+    Returns:
+        Dict of the matching row (all columns), or None.
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM run_history WHERE id = ?", (run_id,)
+        ).fetchone()
+    return _row_to_dict(row)
+
+
+def update_run_report_path(run_id: int, path: str) -> None:
+    """
+    Persist the metrics JSON file path produced by generate_report() so the
+    API can resolve the exact file later without constructing the filename
+    from the integer run_id (which never appears in the filename).
+
+    Args:
+        run_id: The id returned by log_run().
+        path:   Absolute or project-relative path to the metrics_*.json file.
+
+    Raises:
+        SQLiteError: On unexpected database error.
+    """
+    try:
+        with _lock, _connect() as conn:
+            conn.execute(
+                "UPDATE run_history SET report_path = ? WHERE id = ?",
+                (path, run_id),
+            )
+        log.debug("Run report_path stored", run_id=run_id, path=path)
+    except sqlite3.Error as exc:
+        raise SQLiteError(
+            f"update_run_report_path({run_id}) failed: {exc}"
+        ) from exc
 
 
 # ─────────────────────────────────────────────────────────────────────────────

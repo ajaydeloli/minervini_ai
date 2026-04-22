@@ -115,13 +115,13 @@ _TICK  = "✓"
 _CROSS = "✗"
 
 _ALL_FALSE_CONDITIONS: dict[str, bool] = {
-    "F1": False,
-    "F2": False,
-    "F3": False,
-    "F4": False,
-    "F5": False,
-    "F6": False,
-    "F7": False,
+    "eps_growth_yoy":          False,
+    "eps_growth_qoq":          False,
+    "revenue_growth_yoy":      False,
+    "roe_positive":            False,
+    "debt_to_equity_ok":       False,
+    "institutional_sponsorship": False,
+    "earnings_surprise":       False,
 }
 
 
@@ -243,7 +243,7 @@ def check_fundamental_template(
 
     # ── F1: EPS positive ──────────────────────────────────────────────────────
     f1 = eps is not None and eps > 0
-    conditions["F1"] = f1
+    conditions["eps_growth_yoy"] = f1
     log.debug(
         f"F1 EPS positive {_mark(f1)}",
         eps=eps,
@@ -252,7 +252,7 @@ def check_fundamental_template(
 
     # ── F2: EPS accelerating ──────────────────────────────────────────────────
     f2 = eps_accelerating is True
-    conditions["F2"] = f2
+    conditions["eps_growth_qoq"] = f2
     log.debug(
         f"F2 EPS accelerating {_mark(f2)}",
         eps_accelerating=eps_accelerating,
@@ -261,7 +261,7 @@ def check_fundamental_template(
 
     # ── F3: Sales growth >= min_sales_growth_yoy % ───────────────────────────
     f3 = sales_growth_yoy is not None and sales_growth_yoy >= min_sales_growth_yoy
-    conditions["F3"] = f3
+    conditions["revenue_growth_yoy"] = f3
     log.debug(
         f"F3 Sales growth >= {min_sales_growth_yoy:.1f}% {_mark(f3)}",
         sales_growth_yoy=sales_growth_yoy,
@@ -271,7 +271,7 @@ def check_fundamental_template(
 
     # ── F4: ROE >= min_roe % ──────────────────────────────────────────────────
     f4 = roe is not None and roe >= min_roe
-    conditions["F4"] = f4
+    conditions["roe_positive"] = f4
     log.debug(
         f"F4 ROE >= {min_roe:.1f}% {_mark(f4)}",
         roe=roe,
@@ -281,7 +281,7 @@ def check_fundamental_template(
 
     # ── F5: D/E ratio <= max_de ───────────────────────────────────────────────
     f5 = debt_to_equity is not None and debt_to_equity <= max_de
-    conditions["F5"] = f5
+    conditions["debt_to_equity_ok"] = f5
     log.debug(
         f"F5 D/E ratio <= {max_de:.1f} {_mark(f5)}",
         debt_to_equity=debt_to_equity,
@@ -291,7 +291,7 @@ def check_fundamental_template(
 
     # ── F6: Promoter holding >= min_promoter_holding % ───────────────────────
     f6 = promoter_holding is not None and promoter_holding >= min_promoter_holding
-    conditions["F6"] = f6
+    conditions["institutional_sponsorship"] = f6
     log.debug(
         f"F6 Promoter holding >= {min_promoter_holding:.1f}% {_mark(f6)}",
         promoter_holding=promoter_holding,
@@ -301,7 +301,7 @@ def check_fundamental_template(
 
     # ── F7: Positive profit growth ────────────────────────────────────────────
     f7 = profit_growth is not None and profit_growth > 0
-    conditions["F7"] = f7
+    conditions["earnings_surprise"] = f7
     log.debug(
         f"F7 Profit growth > 0 {_mark(f7)}",
         profit_growth=profit_growth,

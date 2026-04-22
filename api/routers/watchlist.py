@@ -270,7 +270,7 @@ async def upload_watchlist(
 
         log.info(
             "Watchlist upload complete",
-            filename=filename,
+            upload_filename=filename,
             added=len(added_list),
             skipped=len(skipped_list),
             invalid=len(invalid_list),

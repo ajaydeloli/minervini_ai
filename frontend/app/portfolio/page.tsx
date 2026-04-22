@@ -254,14 +254,14 @@ export default function PortfolioPage() {
             <TabBar
               active={activeTab}
               onChange={setActiveTab}
-              openCount={openTrades.length}
+              openCount={summary.positions.length}
               closedCount={closedTrades.length}
             />
 
             {/* Tab content */}
             <div className="min-h-[200px]">
               {activeTab === "open" ? (
-                <TradesTable trades={openTrades} mode="open" />
+                <TradesTable trades={summary?.positions ?? []} mode="open" />
               ) : (
                 <TradesTable trades={closedTrades} mode="closed" />
               )}

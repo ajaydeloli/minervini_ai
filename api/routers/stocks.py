@@ -154,6 +154,7 @@ def _row_to_summary(row: dict[str, Any]) -> StockSummary:
     """
     blob = _parse_result_json(row)
     rr_ratio: float | None = blob.get("rr_ratio")
+    target_price: float | None = blob.get("target_price")
 
     return StockSummary(
         symbol=row["symbol"],
@@ -170,6 +171,7 @@ def _row_to_summary(row: dict[str, Any]) -> StockSummary:
         stop_loss=row.get("stop_loss"),
         risk_pct=row.get("risk_pct"),
         rr_ratio=rr_ratio,
+        target_price=target_price,
         fundamental_pass=_coerce_bool_nullable(row.get("fundamental_pass")),
         news_score=row.get("news_score"),
         run_date=row["run_date"],

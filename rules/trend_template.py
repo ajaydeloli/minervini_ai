@@ -195,46 +195,46 @@ def check_trend_template(row: pd.Series, config: dict) -> TrendTemplateResult:
 
     # ── C1: close > SMA_150 AND close > SMA_200 ──────────────────────────────
     c1 = close > sma150 and close > sma200
-    conditions["C1"] = c1
-    details["C1"] = (
+    conditions["above_150_200_ma"] = c1
+    details["above_150_200_ma"] = (
         f"close {close:.2f} > SMA_150 {sma150:.2f} "
         f"AND > SMA_200 {sma200:.2f} {_mark(c1)}"
     )
 
     # ── C2: SMA_150 > SMA_200 ────────────────────────────────────────────────
     c2 = sma150 > sma200
-    conditions["C2"] = c2
-    details["C2"] = (
+    conditions["ma_150_above_ma_200"] = c2
+    details["ma_150_above_ma_200"] = (
         f"SMA_150 {sma150:.2f} > SMA_200 {sma200:.2f} {_mark(c2)}"
     )
 
     # ── C3: MA_slope_200 > 0 ─────────────────────────────────────────────────
     c3 = slope200 > 0.0
-    conditions["C3"] = c3
-    details["C3"] = (
+    conditions["ma_200_trending_up"] = c3
+    details["ma_200_trending_up"] = (
         f"MA_slope_200 {slope200:+.4f}%/day > 0 {_mark(c3)}"
     )
 
     # ── C4: SMA_50 > SMA_150 AND SMA_50 > SMA_200 ───────────────────────────
     c4 = sma50 > sma150 and sma50 > sma200
-    conditions["C4"] = c4
-    details["C4"] = (
+    conditions["ma_50_above_ma_150_200"] = c4
+    details["ma_50_above_ma_150_200"] = (
         f"SMA_50 {sma50:.2f} > SMA_150 {sma150:.2f} "
         f"AND > SMA_200 {sma200:.2f} {_mark(c4)}"
     )
 
     # ── C5: close > SMA_50 ───────────────────────────────────────────────────
     c5 = close > sma50
-    conditions["C5"] = c5
-    details["C5"] = (
+    conditions["price_above_ma_50"] = c5
+    details["price_above_ma_50"] = (
         f"close {close:.2f} > SMA_50 {sma50:.2f} {_mark(c5)}"
     )
 
     # ── C6: close >= low_52w * (1 + pct_above_52w_low / 100) ────────────────
     c6_threshold = low_52w * (1.0 + pct_above_52w_low / 100.0)
     c6 = close >= c6_threshold
-    conditions["C6"] = c6
-    details["C6"] = (
+    conditions["price_above_52w_low_30pct"] = c6
+    details["price_above_52w_low_30pct"] = (
         f"close {close:.2f} >= low_52w {low_52w:.2f} "
         f"* {1.0 + pct_above_52w_low / 100.0:.2f} "
         f"(threshold {c6_threshold:.2f}) {_mark(c6)}"
@@ -244,8 +244,8 @@ def check_trend_template(row: pd.Series, config: dict) -> TrendTemplateResult:
     #   "within 25% of 52w high" means close >= 0.75 * high_52w
     c7_threshold = high_52w * (1.0 - pct_below_52w_high / 100.0)
     c7 = close >= c7_threshold
-    conditions["C7"] = c7
-    details["C7"] = (
+    conditions["price_within_25pct_52w_high"] = c7
+    details["price_within_25pct_52w_high"] = (
         f"close {close:.2f} >= high_52w {high_52w:.2f} "
         f"* {1.0 - pct_below_52w_high / 100.0:.2f} "
         f"(threshold {c7_threshold:.2f}) {_mark(c7)}"
@@ -253,8 +253,8 @@ def check_trend_template(row: pd.Series, config: dict) -> TrendTemplateResult:
 
     # ── C8: RS_rating >= min_rs_rating ───────────────────────────────────────
     c8 = rs_rating >= min_rs_rating
-    conditions["C8"] = c8
-    details["C8"] = (
+    conditions["rs_52w_high"] = c8
+    details["rs_52w_high"] = (
         f"RS_rating {int(rs_rating)} >= {min_rs_rating} {_mark(c8)}"
     )
 

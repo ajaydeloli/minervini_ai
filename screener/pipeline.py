@@ -57,10 +57,25 @@ log = get_logger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _null_tt_result() -> TrendTemplateResult:
-    """Empty TrendTemplateResult used when Stage 2 gate fails."""
+    """Empty TrendTemplateResult used when Stage 2 gate fails.
+
+    NOTE: Keys MUST match the condition keys used by check_trend_template()
+    so that the frontend TrendTemplateCard renders them correctly.
+    The old C1-C8 generic keys caused all conditions to show as failed (✗)
+    on the dashboard for every non-Stage-2 stock.
+    """
     return TrendTemplateResult(
         passes=False,
-        conditions={f"C{i}": False for i in range(1, 9)},
+        conditions={
+            "above_150_200_ma":            False,
+            "ma_150_above_ma_200":         False,
+            "ma_200_trending_up":          False,
+            "ma_50_above_ma_150_200":      False,
+            "price_above_ma_50":           False,
+            "price_above_52w_low_30pct":   False,
+            "price_within_25pct_52w_high": False,
+            "rs_52w_high":                 False,
+        },
         conditions_met=0,
         details={},
     )

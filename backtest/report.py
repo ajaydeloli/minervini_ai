@@ -279,6 +279,49 @@ def _write_csv(result: BacktestResult, path: Path) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# _write_equity_curve_csv
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _write_equity_curve_csv(result: BacktestResult, path: Path) -> None:
+    """
+    Write the equity curve DataFrame to a CSV with the canonical schema:
+
+        date, portfolio_value, benchmark_value, regime
+
+    * ``date``            – ISO-8601 string from the DataFrame index.
+    * ``portfolio_value`` – ``equity`` column.
+    * ``benchmark_value`` – ``benchmark`` column when present, else null.
+    * ``regime``          – ``regime`` column when present, else null.
+    """
+    eq = result.equity_curve
+
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(
+            fh,
+            fieldnames=["date", "portfolio_value", "benchmark_value", "regime"],
+        )
+        writer.writeheader()
+
+        for idx, row in eq.iterrows():
+            # Normalise the index value to an ISO date string
+            if hasattr(idx, "date"):
+                date_str = idx.date().isoformat()
+            else:
+                date_str = str(idx)
+
+            writer.writerow(
+                {
+                    "date": date_str,
+                    "portfolio_value": row["equity"],
+                    "benchmark_value": row["benchmark"] if "benchmark" in eq.columns else None,
+                    "regime": row["regime"] if "regime" in eq.columns else None,
+                }
+            )
+
+    log.info("Equity-curve CSV written", path=str(path), rows=len(eq))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # _generate_equity_chart
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -501,13 +544,15 @@ def generate_report(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    csv_path     = out_dir / f"backtest_{label}_{today}.csv"
-    html_path    = out_dir / f"backtest_{label}_{today}.html"
-    chart_path   = out_dir / f"equity_curve_{label}_{today}.png"
-    metrics_path = out_dir / f"metrics_{label}_{today}.json"
+    csv_path          = out_dir / f"backtest_{label}_{today}.csv"
+    html_path         = out_dir / f"backtest_{label}_{today}.html"
+    chart_path        = out_dir / f"equity_curve_{label}_{today}.png"
+    metrics_path      = out_dir / f"metrics_{label}_{today}.json"
+    equity_curve_path = out_dir / f"equity_curve_{label}_{today}.csv"
 
     _write_csv(result, csv_path)
     _generate_equity_chart(result, chart_path)
+    _write_equity_curve_csv(result, equity_curve_path)
     html_path.write_text(_render_html(result, chart_path), encoding="utf-8")
 
     # ── Serialize pre-computed metrics so the dashboard never has to
@@ -527,6 +572,13 @@ def generate_report(
         csv=str(csv_path),
         chart=str(chart_path),
         metrics=str(metrics_path),
+        equity_curve_csv=str(equity_curve_path),
         trades=len(result.trades),
     )
-    return {"html": html_path, "csv": csv_path, "chart": chart_path, "metrics": metrics_path}
+    return {
+        "html": html_path,
+        "csv": csv_path,
+        "chart": chart_path,
+        "metrics": metrics_path,
+        "equity_curve_csv": equity_curve_path,
+    }

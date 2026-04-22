@@ -64,8 +64,8 @@ function UploadResult({ result }: { result: WatchlistUploadResult }) {
       <div className="flex items-center gap-2 text-teal-400 font-medium">
         <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
         <span>
-          Added {result.added} symbol{result.added !== 1 ? "s" : ""},{" "}
-          skipped {result.skipped}
+          Added {result.added.length} symbol{result.added.length !== 1 ? "s" : ""},{" "}
+          skipped {result.skipped.length}
         </span>
       </div>
       {result.invalid.length > 0 && (

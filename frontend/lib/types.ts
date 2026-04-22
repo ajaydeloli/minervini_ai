@@ -164,6 +164,8 @@ export interface HealthResponse {
   last_run_status: string | null;
   last_run_duration_sec: number | null;
   api_version: string;
+  auth_mode: "full" | "read_key_only" | "open";
+  db_exists: boolean;
 }
 
 // ─── MetaResponse ──────────────────────────────────────────────────────────
@@ -198,8 +200,8 @@ export interface BulkAddResult {
 // ─── Watchlist file upload response ───────────────────────────────────────
 
 export interface WatchlistUploadResult {
-  added: number;
-  skipped: number;
+  added: string[];
+  skipped: string[];
   invalid: string[];
   watchlist: WatchlistItem[];
 }
@@ -223,23 +225,33 @@ export interface BacktestRunSummary {
   a_count: number;
 }
 
-export interface BacktestReport {
-  run_id: string;
-  start_date: string;
-  end_date: string;
-  total_return_pct: number;
-  cagr_pct: number;
-  max_drawdown_pct: number;
-  sharpe_ratio: number;
-  win_rate: number;
+export interface BacktestRegimeStat {
   total_trades: number;
-  regime_stats: {
-    regime: string;
-    trades: number;
-    win_rate: number;
-    avg_return: number;
-    total_return: number;
-  }[];
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;         // 0–100
+}
+
+export interface BacktestReport {
+  // Trade counts
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;           // 0–100 (e.g. 65.0 means 65 %)
+
+  // Returns
+  cagr: number;               // Compound Annual Growth Rate %
+  total_return_pct: number;
+  sharpe_ratio: number;
+  max_drawdown_pct: number;   // ≤ 0 (e.g. -18.5 means 18.5 % drawdown)
+
+  // Per-trade stats
+  avg_r_multiple: number;
+  profit_factor: number;
+  expectancy_pct: number;
+
+  // Regime breakdown keyed by regime name
+  by_regime: Record<string, BacktestRegimeStat>;
 }
 
 export interface EquityCurvePoint {

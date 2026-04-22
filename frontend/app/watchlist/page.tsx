@@ -224,7 +224,7 @@ export default function WatchlistPage() {
     setOptimisticRemoved(new Set());
     await mutateWatchlist();
     showToast(
-      `Added ${result.added} symbol${result.added !== 1 ? "s" : ""} via file`,
+      `Added ${result.added.length} symbol${result.added.length !== 1 ? "s" : ""} via file`,
       "ok"
     );
   }

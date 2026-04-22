@@ -24,7 +24,7 @@ import { useRouter } from "next/navigation";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import QualityBadge from "@/components/QualityBadge";
-import type { Trade } from "@/lib/types";
+import type { Trade, PositionRow } from "@/lib/types";
 
 // ─── Formatters ─────────────────────────────────────────────────────────────
 
@@ -161,15 +161,15 @@ function Th({
 
 // ─── Open trades table ────────────────────────────────────────────────────────
 
-function OpenTradesTable({ trades }: { trades: Trade[] }) {
+function OpenTradesTable({ trades }: { trades: PositionRow[] }) {
   const router = useRouter();
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
 
   const sorted = React.useMemo(
     () =>
       [...trades].sort((a, b) => {
-        const av = a.pnl ?? 0;
-        const bv = b.pnl ?? 0;
+        const av = a.unrealised_pnl ?? 0;
+        const bv = b.unrealised_pnl ?? 0;
         return sortDir === "desc" ? bv - av : av - bv;
       }),
     [trades, sortDir]
@@ -226,9 +226,9 @@ function OpenTradesTable({ trades }: { trades: Trade[] }) {
                 {fmtInr(t.entry_price)}
               </td>
 
-              {/* Current Price — Trade type has no current_price; display exit_price if set else — */}
+              {/* Current Price */}
               <td className="px-4 py-3 text-right font-mono tabular-nums text-zinc-200">
-                {t.exit_price != null ? fmtInr(t.exit_price) : "—"}
+                {fmtInr(t.current_price)}
               </td>
 
               {/* Qty */}
@@ -241,21 +241,21 @@ function OpenTradesTable({ trades }: { trades: Trade[] }) {
                 {fmtDate(t.entry_date)}
               </td>
 
-              {/* Stop Loss — not on Trade type, show — */}
+              {/* Stop Loss */}
               <td className="px-4 py-3 text-right font-mono tabular-nums text-zinc-500 hidden sm:table-cell">
-                —
+                {fmtInr(t.stop_loss)}
               </td>
 
               {/* Unrealised P&L ₹ */}
-              <td className={cn("px-4 py-3 text-right font-mono tabular-nums font-medium", pnlClass(t.pnl))}>
-                {t.pnl != null
-                  ? `${t.pnl >= 0 ? "+" : ""}${fmtInrInt(t.pnl)}`
+              <td className={cn("px-4 py-3 text-right font-mono tabular-nums font-medium", pnlClass(t.unrealised_pnl))}>
+                {t.unrealised_pnl != null
+                  ? `${t.unrealised_pnl >= 0 ? "+" : ""}${fmtInrInt(t.unrealised_pnl)}`
                   : "—"}
               </td>
 
               {/* Unrealised P&L % */}
-              <td className={cn("px-4 py-3 text-right font-mono tabular-nums hidden sm:table-cell", pnlClass(t.pnl_pct))}>
-                {fmtPct(t.pnl_pct)}
+              <td className={cn("px-4 py-3 text-right font-mono tabular-nums hidden sm:table-cell", pnlClass(t.unrealised_pnl_pct))}>
+                {fmtPct(t.unrealised_pnl_pct)}
               </td>
 
               {/* Quality badge */}
@@ -380,15 +380,14 @@ function ClosedTradesTable({ trades }: { trades: Trade[] }) {
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 
-interface TradesTableProps {
-  trades: Trade[];
-  mode: "open" | "closed";
-}
+type TradesTableProps =
+  | { trades: PositionRow[]; mode: "open" }
+  | { trades: Trade[]; mode: "closed" };
 
 export default function TradesTable({ trades, mode }: TradesTableProps) {
   return mode === "open" ? (
-    <OpenTradesTable trades={trades} />
+    <OpenTradesTable trades={trades as PositionRow[]} />
   ) : (
-    <ClosedTradesTable trades={trades} />
+    <ClosedTradesTable trades={trades as Trade[]} />
   );
 }

@@ -45,6 +45,7 @@ from backtest.engine import run_backtest, run_parameter_sweep
 from backtest.report import generate_report
 from utils.exceptions import BacktestDataError, MinerviniError
 from utils.logger import get_logger, setup_logging
+import storage.sqlite_store as sqlite_store
 
 log = get_logger(__name__)
 
@@ -277,6 +278,14 @@ def main() -> None:
         db_path=str(db_path),
     )
 
+    # ── Initialise DB and record that this run has started ────────────────────
+    sqlite_store.init_db(db_path)
+    run_id: int = sqlite_store.log_run(
+        run_date=start_date,
+        run_mode="backtest",
+        scope=args.universe,
+    )
+
     try:
         # ── Step 5a: parameter sweep ──────────────────────────────────────────
         if args.sweep:
@@ -312,6 +321,10 @@ def main() -> None:
         # ── Step 6: generate report ───────────────────────────────────────────
         report_paths = generate_report(result, output_dir, run_label=label)
 
+        # ── Step 6b: store the metrics file path in the DB ───────────────────
+        sqlite_store.update_run_report_path(run_id, str(report_paths["metrics"]))
+        sqlite_store.finish_run(run_id, status="success")
+
         # ── Step 7: print summary ─────────────────────────────────────────────
         _print_summary(
             start_date=start_date,
@@ -321,14 +334,17 @@ def main() -> None:
         )
 
     except BacktestDataError as exc:
+        sqlite_store.finish_run(run_id, status="failed", error_msg=str(exc))
         print(f"ERROR [BacktestDataError]: {exc}", file=sys.stderr)
         log.error("Backtest data error", reason=str(exc))
         sys.exit(1)
     except MinerviniError as exc:
+        sqlite_store.finish_run(run_id, status="failed", error_msg=str(exc))
         print(f"ERROR [{type(exc).__name__}]: {exc}", file=sys.stderr)
         log.error("Minervini domain error", reason=str(exc))
         sys.exit(1)
     except Exception as exc:  # noqa: BLE001
+        sqlite_store.finish_run(run_id, status="failed", error_msg=str(exc))
         print(f"ERROR: Unexpected error: {exc}", file=sys.stderr)
         log.exception("Unexpected error in backtest_runner")
         sys.exit(1)

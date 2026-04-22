@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minervini SEPA Watchlist — 2026-04-22</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:          #0d1117;
+    --surface:     #161b22;
+    --surface2:    #21262d;
+    --border:      #30363d;
+    --text:        #e6edf3;
+    --muted:       #8b949e;
+    --accent:      #58a6ff;
+    --gold:        #f0b429;
+    --gold-bg:     #2e2300;
+    --green:       #3fb950;
+    --green-bg:    #0f2a1a;
+    --blue:        #58a6ff;
+    --blue-bg:     #0d1f33;
+    --grey:        #8b949e;
+    --grey-bg:     #1c2128;
+    --red:         #f85149;
+    --star-on:     #f0b429;
+    --star-off:    #30363d;
+    --row-hover:   #1c2128;
+    --shadow:      0 4px 20px rgba(0,0,0,0.5);
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 0 0 48px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ── Header ───────────────────────────────────────────────────────── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 24px;
+    box-shadow: var(--shadow);
+  }
+  .header-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .header-title span { color: var(--accent); }
+  .header-meta {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  .stat-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .stat-chip strong {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .stat-chip.aplus strong { color: var(--gold); }
+  .stat-chip.a     strong { color: var(--green); }
+  .stat-chip.total strong { color: var(--text); }
+
+  /* ── Main container ───────────────────────────────────────────────── */
+  .container { max-width: 1300px; margin: 32px auto; padding: 0 24px; }
+
+  /* ── Section headings ─────────────────────────────────────────────── */
+  .section-heading {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Tables ───────────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--row-hover); }
+  td { padding: 9px 14px; vertical-align: middle; white-space: nowrap; }
+  .col-rank  { color: var(--muted); font-size: 12px; width: 44px; text-align: center; }
+  .col-sym   { font-weight: 700; font-size: 14px; color: var(--text); }
+  .col-score { font-weight: 700; color: var(--accent); }
+  .col-num   { color: var(--muted); }
+  .col-bool  { text-align: center; }
+  .col-bool .yes { color: var(--green); font-weight: 600; }
+  .col-bool .no  { color: var(--muted); }
+
+  /* ── Star (watchlist indicator) ───────────────────────────────────── */
+  .star     { font-size: 16px; line-height: 1; }
+  .star.on  { color: var(--star-on);  }
+  .star.off { color: var(--star-off); }
+
+  /* ── Quality badges ───────────────────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .badge-aplus { background: var(--gold-bg);  color: var(--gold);  border: 1px solid var(--gold); }
+  .badge-a     { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+  .badge-b     { background: var(--blue-bg);  color: var(--blue);  border: 1px solid var(--blue); }
+  .badge-c     { background: var(--grey-bg);  color: var(--grey);  border: 1px solid var(--grey); }
+  .badge-fail  { background: #1a0a0a; color: var(--red); border: 1px solid var(--red); }
+  .badge-pass  { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+  .badge-neutral { background: var(--grey-bg); color: var(--grey); border: 1px solid var(--grey); }
+  .badge-neg   { background: #1a0a0a; color: var(--red); border: 1px solid var(--red); }
+  .fund-detail { font-size: 11px; color: var(--muted); margin-top: 3px; white-space: nowrap; }
+
+  /* ── Collapsible section ──────────────────────────────────────────── */
+  details { margin-top: 32px; }
+  details > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+    outline: none;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary .chevron {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    text-align: center;
+    line-height: 15px;
+    font-size: 12px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  details[open] > summary .chevron { transform: rotate(90deg); }
+  .all-results-wrap { margin-top: 14px; }
+
+  /* ── Empty state ──────────────────────────────────────────────────── */
+  .empty-state {
+    text-align: center;
+    padding: 36px 16px;
+    color: var(--muted);
+    font-size: 14px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+
+  /* ── Footer ───────────────────────────────────────────────────────── */
+  .footer {
+    margin-top: 48px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .footer strong { color: var(--accent); }
+
+  /* ── Trade brief column ───────────────────────────────────────────── */
+  .col-brief { min-width: 200px; max-width: 340px; white-space: normal; }
+  .brief-toggle { cursor: pointer; }
+  .brief-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  .brief-label::-webkit-details-marker { display: none; }
+  .brief-text {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    white-space: normal;
+    padding: 6px 8px;
+    background: var(--surface2);
+    border-left: 2px solid var(--accent);
+    border-radius: 3px;
+  }
+  .muted-dash { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="header">
+  <div class="header-title">
+    Minervini <span>SEPA</span> Watchlist — 2026-04-22
+  </div>
+  <div class="header-meta">
+    <div class="stat-chip aplus">
+      <strong>0</strong> A+ Setups
+    </div>
+    <div class="stat-chip a">
+      <strong>0</strong> A Setups
+    </div>
+    <div class="stat-chip total">
+      <strong>1</strong> Total Screened
+    </div>
+    <div class="stat-chip">
+      Generated: 2026-04-22 17:06:45
+    </div>
+  </div>
+</div>
+
+
+<div class="container">
+
+  
+  
+  
+
+  
+  <details open>
+    <summary>
+      <span class="chevron">▶</span>
+      <span class="section-heading" style="margin-bottom:0;border:none;">
+        All Results (1)
+      </span>
+    </summary>
+    <div class="all-results-wrap">
+      
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-rank">#</th>
+              <th>★</th>
+              <th>Symbol</th>
+              <th>Score</th>
+              <th>Quality</th>
+              <th>Stage</th>
+              <th>RS</th>
+              <th>VCP</th>
+              <th>Breakout</th>
+              <th>Entry</th>
+              <th>Stop</th>
+              <th>Risk %</th>
+              <th>Fundamentals</th>
+              <th>News</th>
+              <th>Trade Brief</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td class="col-rank">1</td>
+              <td class="star on">
+                ★
+              </td>
+              <td class="col-sym">GALLANTT</td>
+              <td class="col-score">0</td>
+              <td>
+  <span class="badge badge-fail">FAIL</span>
+  
+</td>
+              <td class="col-num">1</td>
+              <td class="col-num">0</td>
+              <td class="col-bool">
+  <span class="no">—</span>
+</td>
+              <td class="col-bool">
+  <span class="no">—</span>
+</td>
+              <td class="col-num">—</td>
+              <td class="col-num">—</td>
+              <td class="col-num">—</td>
+              <td>
+  
+  
+    
+    
+      <span class="badge badge-fail">❌ ?/7</span>
+    
+    <div class="fund-detail">
+      ROE 0.0%
+      · D/E 0.00
+      · EPS N
+      · Sales 0.0%
+      · Promo 0.0%
+    </div>
+  
+</td>
+              <td>
+  
+    <span class="badge badge-neutral">N/A</span>
+  
+</td>
+              <td class="col-brief">
+                
+                
+                  <span class="muted-dash">—</span>
+                
+              </td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+      
+    </div>
+  </details>
+
+  
+  <div class="footer">
+    Generated by <strong>Minervini AI</strong> &nbsp;|&nbsp; minervini_ai v0.x
+  </div>
+
+</div><!-- /container -->
+</body>
+</html>

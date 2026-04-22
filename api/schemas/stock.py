@@ -60,6 +60,9 @@ class StockSummary(BaseModel):
     stop_loss           : Calculated stop-loss price; None if not applicable.
     risk_pct            : (entry − stop) / entry × 100; None if not applicable.
     rr_ratio            : Reward:Risk ratio; None if no resistance pivot found.
+    target_price        : Profit-target price used by the R:R calculation
+                          (nearest swing-high / 52-week high / synthetic);
+                          None when no R:R has been computed.
     fundamental_pass    : True when fundamental template passed (Phase 5+).
                           None when fundamentals were not evaluated.
     news_score          : Sentiment score −100..+100; None when not evaluated.
@@ -80,6 +83,7 @@ class StockSummary(BaseModel):
     stop_loss:            float | None
     risk_pct:             float | None
     rr_ratio:             float | None
+    target_price:         float | None = None
     fundamental_pass:     bool  | None
     news_score:           float | None
     run_date:             str           # ISO date string, e.g. "2024-01-15"

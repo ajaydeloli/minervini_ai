@@ -200,10 +200,10 @@ function EquityCurveChart({ data }: EquityCurveChartProps) {
 
 interface RegimeStat {
   regime: string;
-  trades: number;
-  win_rate: number;
-  avg_return: number;
-  total_return: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;   // 0–100
 }
 
 function RegimeTable({ rows }: { rows: RegimeStat[] }) {
@@ -218,11 +218,7 @@ function RegimeTable({ rows }: { rows: RegimeStat[] }) {
     return "";
   }
 
-  function fmtPct(v: number): string {
-    return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-  }
-
-  const headers = ["Regime", "Trades", "Win Rate", "Avg Return", "Total Return"];
+  const headers = ["Regime", "Trades", "Won", "Lost", "Win Rate"];
 
   return (
     <div className="rounded-xl border border-[#1E1E21] bg-[#161618] overflow-hidden">
@@ -252,25 +248,16 @@ function RegimeTable({ rows }: { rows: RegimeStat[] }) {
                 <td className="px-4 py-3 font-medium text-zinc-200 capitalize">
                   {row.regime}
                 </td>
-                <td className="px-4 py-3 font-mono text-zinc-300">{row.trades}</td>
-                <td className="px-4 py-3 font-mono text-zinc-300">
-                  {(row.win_rate * 100).toFixed(1)}%
-                </td>
+                <td className="px-4 py-3 font-mono text-zinc-300">{row.total_trades}</td>
+                <td className="px-4 py-3 font-mono text-green-400">{row.winning_trades}</td>
+                <td className="px-4 py-3 font-mono text-red-400">{row.losing_trades}</td>
                 <td
                   className={cn(
                     "px-4 py-3 font-mono",
-                    row.avg_return >= 0 ? "text-green-400" : "text-red-400"
+                    row.win_rate >= 50 ? "text-green-400" : "text-red-400"
                   )}
                 >
-                  {fmtPct(row.avg_return)}
-                </td>
-                <td
-                  className={cn(
-                    "px-4 py-3 font-mono",
-                    row.total_return >= 0 ? "text-green-400" : "text-red-400"
-                  )}
-                >
-                  {fmtPct(row.total_return)}
+                  {row.win_rate.toFixed(1)}%
                 </td>
               </tr>
             ))}
@@ -374,7 +361,7 @@ export default function BacktestPage() {
   }
   function winPct(v?: number): string {
     if (v == null) return "—";
-    return `${(v * 100).toFixed(1)}%`;
+    return `${v.toFixed(1)}%`;
   }
 
   // ── Run date label ────────────────────────────────────────────────────────
@@ -464,8 +451,8 @@ export default function BacktestPage() {
             />
             <KpiCard
               label="CAGR"
-              value={pct(report.cagr_pct)}
-              positive={report.cagr_pct >= 0}
+              value={pct(report.cagr)}
+              positive={report.cagr >= 0}
             />
             <KpiCard
               label="Max Drawdown"
@@ -481,7 +468,7 @@ export default function BacktestPage() {
             <KpiCard
               label="Win Rate"
               value={winPct(report.win_rate)}
-              positive={report.win_rate >= 0.5}
+              positive={report.win_rate >= 50}
             />
             <KpiCard
               label="Total Trades"
@@ -493,7 +480,12 @@ export default function BacktestPage() {
           <EquityCurveChart data={curve} />
 
           {/* Regime table */}
-          <RegimeTable rows={report.regime_stats ?? []} />
+          <RegimeTable
+            rows={Object.entries(report.by_regime ?? {}).map(([regime, stat]) => ({
+              regime,
+              ...stat,
+            }))}
+          />
         </>
       )}
     </div>

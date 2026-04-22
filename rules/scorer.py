@@ -393,6 +393,20 @@ def evaluate(
     has_resistance: Optional[bool] = rr_result.has_resistance if rr_result else None
 
     # ── HARD GATE: non-Stage-2 → score=0, quality=FAIL immediately ───────────
+    # Canonical all-false fundamental conditions dict (matches FundamentalCard keys).
+    # Used for non-Stage-2 stocks where fundamentals are never evaluated, so the
+    # frontend shows the correct keys with ✗ rather than an empty dict (which
+    # caused all 7 conditions to silently not render).
+    _EMPTY_FUND_CONDITIONS: dict[str, bool] = {
+        "eps_growth_yoy":          False,
+        "eps_growth_qoq":          False,
+        "revenue_growth_yoy":      False,
+        "roe_positive":            False,
+        "debt_to_equity_ok":       False,
+        "institutional_sponsorship": False,
+        "earnings_surprise":       False,
+    }
+
     if stage_result.stage != 2:
         result = SEPAResult(
             symbol=symbol,
@@ -418,6 +432,8 @@ def evaluate(
             rs_rating=rs_rating,
             setup_quality="FAIL",
             score=0,
+            fundamental_pass=False,
+            fundamental_details=dict(_EMPTY_FUND_CONDITIONS),
         )
         log.info(
             "SEPA evaluate: non-Stage-2 hard gate",

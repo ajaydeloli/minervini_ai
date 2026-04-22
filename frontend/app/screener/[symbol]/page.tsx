@@ -216,8 +216,8 @@ export default function StockDeepDivePage() {
   // ── Derived display values ─────────────────────────────────────────────────
   const riskPct  = stock.risk_pct != null ? `${stock.risk_pct.toFixed(1)}%` : null;
   const rrRatio  = stock.rr_ratio != null ? `${stock.rr_ratio.toFixed(1)}×`  : null;
-  const entryFmt = stock.entry_price != null ? `$${stock.entry_price.toFixed(2)}` : null;
-  const stopFmt  = stock.stop_loss   != null ? `$${stock.stop_loss.toFixed(2)}`   : null;
+  const entryFmt = stock.entry_price != null ? `₹${stock.entry_price.toFixed(2)}` : null;
+  const stopFmt  = stock.stop_loss   != null ? `₹${stock.stop_loss.toFixed(2)}`   : null;
 
   // VCP zone (rough band: entry ± base range)
   const vcpZone = stock.vcp_qualified && stock.entry_price && stock.stop_loss

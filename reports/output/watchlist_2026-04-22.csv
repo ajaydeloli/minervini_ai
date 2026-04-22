@@ -1,0 +1,2 @@
+rank,symbol,score,setup_quality,stage,rs_rating,vcp_qualified,breakout_triggered,entry_price,stop_loss,risk_pct,in_watchlist,fundamental_pass,fundamental_details,news_score
+1,GALLANTT,0,FAIL,1,0,False,False,,,,True,False,"{'eps_growth_yoy': False, 'eps_growth_qoq': False, 'revenue_growth_yoy': False, 'roe_positive': False, 'debt_to_equity_ok': False, 'institutional_sponsorship': False, 'earnings_surprise': False}",

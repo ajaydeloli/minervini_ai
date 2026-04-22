@@ -6,26 +6,9 @@ mode: "list"                      # "list" | "nifty500" | "nse_all"
 
 # Handpicked starting universe — expand this as you go
 symbols:
-  - RELIANCE
-  - TCS
-  - INFY
-  - HDFCBANK
-  - ICICIBANK
-  - SBIN
-  - BAJFINANCE
-  - WIPRO
-  - MARUTI
-  - SUNPHARMA
-  - AXISBANK
-  - DIXON
-  - TATAELXSI
-  - CDSL
-  - DMART
-  - TITAN
-  - ASIANPAINT
-  - NESTLEIND
-  - LTIM
-  - HCLTECH 
+  - SAIL
+  - SYRMA
+  
 
 # Filters applied to any symbol before it enters the universe
 filters:

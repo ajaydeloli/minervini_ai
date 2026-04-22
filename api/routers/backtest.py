@@ -5,8 +5,8 @@ Read-only backtest history endpoints.
 
 The backtest engine writes two artefacts per run:
   • A row in the run_history SQLite table  (run_mode='backtest')
-  • data/reports/backtest_{run_id}.json    (full stats / metrics blob)
-  • data/backtests/{run_id}/equity_curve.csv  (optional daily curve)
+  • reports/backtest/metrics_{run_label}_{date}.json  (full stats / metrics blob)
+  • data/backtests/{run_id}/equity_curve.csv          (optional daily curve)
 
 Endpoints (all require X-API-Key / require_read_key, READ-ONLY)
 ───────────────────────────────────────────────────────────────
@@ -16,9 +16,9 @@ Endpoints (all require X-API-Key / require_read_key, READ-ONLY)
       a_plus_count, a_count.
 
   GET /api/v1/backtest/runs/{run_id}/summary
-      Read data/reports/backtest_{run_id}.json and return the raw
-      JSON blob wrapped in APIResponse[dict].
-      Returns HTTP 404 when the file does not exist.
+      Search reports/backtest/ for metrics_*.json files and return the best
+      match for the given run_id (or the newest file when no match exists).
+      Returns HTTP 404 when the directory contains no metrics files.
 
   GET /api/v1/backtest/equity-curve
       Query param: run_id (str | None, defaults to most-recent backtest).
@@ -49,7 +49,7 @@ from starlette.requests import Request
 from api.deps import require_read_key
 from api.rate_limit import READ_LIMIT, limiter
 from api.schemas.common import APIResponse, err, ok
-from storage.sqlite_store import get_run_history
+from storage.sqlite_store import get_run_history, get_run_by_id
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -60,8 +60,8 @@ router = APIRouter(prefix="/backtest", tags=["backtest"])
 # File-system path constants  (CWD-relative, mirrors the rest of the project)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_REPORTS_DIR: Path = Path("data/reports")
-_BACKTESTS_DIR: Path = Path("data/backtests")
+_REPORTS_DIR: Path = Path("reports/backtest")
+_BACKTESTS_DIR: Path = Path("reports/backtest")
 
 # Columns the equity-curve endpoint will surface (in this order, if present)
 _EQUITY_CURVE_COLS = ["date", "portfolio_value", "benchmark_value", "regime"]
@@ -90,15 +90,58 @@ def _project_run_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _read_report_file(run_id: str) -> dict[str, Any]:
+def _get_report_path_from_db(run_id: str) -> Path:
     """
-    Read and JSON-parse data/reports/backtest_{run_id}.json.
+    Look up the ``report_path`` column stored by backtest_runner for the
+    given integer run_id.
+
+    Args:
+        run_id: The string representation of the run_history primary key.
+
+    Returns:
+        A ``pathlib.Path`` pointing to the metrics JSON file.
 
     Raises:
-        FileNotFoundError: when the file does not exist on disk.
-        json.JSONDecodeError: when the file exists but is not valid JSON.
+        FileNotFoundError: when the run does not exist in the DB, the
+            ``report_path`` column is NULL (run pre-dates this feature), or
+            the stored path no longer exists on disk.
+        ValueError: when *run_id* cannot be converted to an integer.
     """
-    path = _REPORTS_DIR / f"backtest_{run_id}.json"
+    try:
+        int_id = int(run_id)
+    except (TypeError, ValueError):
+        raise ValueError(f"run_id must be an integer string, got {run_id!r}")
+
+    row = get_run_by_id(int_id)
+    if row is None:
+        raise FileNotFoundError(
+            f"No run_history row found for run_id '{run_id}'."
+        )
+
+    stored_path: str | None = row.get("report_path")
+    if not stored_path:
+        raise FileNotFoundError(
+            f"run_id '{run_id}' has no report_path recorded "
+            f"(run may pre-date this feature)."
+        )
+
+    path = Path(stored_path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Metrics file for run_id '{run_id}' not found on disk: {path}"
+        )
+
+    log.debug("_get_report_path_from_db: resolved", run_id=run_id, path=str(path))
+    return path
+
+
+def _read_report_file(path: Path) -> dict[str, Any]:
+    """
+    JSON-parse a metrics file returned by ``_get_report_path_from_db``.
+
+    Raises:
+        json.JSONDecodeError: when the file is not valid JSON.
+    """
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -148,9 +191,10 @@ def list_backtest_runs(
     response_model=APIResponse[dict],
     summary="Full backtest report for a single run",
     description=(
-        "Reads data/reports/backtest_{run_id}.json and returns the raw "
-        "metrics blob wrapped in APIResponse[dict]. "
-        "Returns HTTP 404 when no report file exists for the given run_id."
+        "Searches reports/backtest/ for metrics_*.json files and returns the "
+        "best match for the given run_id (or the newest file when no exact "
+        "match exists), wrapped in APIResponse[dict]. "
+        "Returns HTTP 404 when no metrics files are found in the directory."
     ),
 )
 @limiter.limit(READ_LIMIT)
@@ -161,7 +205,10 @@ def get_backtest_summary(
 ) -> APIResponse[dict]:
     log.debug("GET /backtest/runs/{run_id}/summary", run_id=run_id)
     try:
-        report = _read_report_file(run_id)
+        path = _get_report_path_from_db(run_id)
+        report = _read_report_file(path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     except FileNotFoundError:
         raise HTTPException(
             status_code=404,
@@ -234,8 +281,33 @@ def get_equity_curve(
         run_id = str(recent[0]["id"])
         log.debug("Equity-curve: resolved run_id from DB", run_id=run_id)
 
-    # ── Read the CSV ───────────────────────────────────────────────────────
-    csv_path = _BACKTESTS_DIR / run_id / "equity_curve.csv"
+    # ── Locate the equity-curve CSV via glob (newest file wins) ──────────
+    #
+    # report.py writes:  reports/backtest/equity_curve_{label}_{date}.csv
+    # When run_id is supplied we prefer files whose name contains that
+    # run_id token; otherwise we fall back to the newest file overall.
+    candidates = sorted(
+        _BACKTESTS_DIR.glob("equity_curve_*.csv"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+    if not candidates:
+        raise HTTPException(
+            status_code=404,
+            detail="No equity_curve_*.csv files found in reports/backtest/.",
+        )
+
+    # Prefer a file that contains the run_id in its stem (best-effort match)
+    csv_path = candidates[0]          # default: most-recently modified
+    if run_id is not None:
+        for c in candidates:
+            if run_id in c.stem:
+                csv_path = c
+                break
+
+    log.debug("Equity-curve: using CSV", path=str(csv_path), run_id=run_id)
+
     try:
         df = pd.read_csv(csv_path)
     except FileNotFoundError:
